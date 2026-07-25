@@ -3574,7 +3574,7 @@ function renderEditCalendar(){
   const wrap=document.getElementById('edit-calendar-wrap');if(!mName){wrap.innerHTML='';return;}
   const month=getMonthsForRole(role).find(m=>m.name===mName);
   if(!month){wrap.innerHTML='<div style="color:var(--text3);padding:12px">Month not found</div>';return;}
-  const staff=[...(S.staff.avia[role]||[]),...(S.staff.weather[role]||[])];
+  const staff=[...new Set([...(S.staff.avia[role]||[]),...(S.staff.weather[role]||[])])];
   wrap.innerHTML=`<div class="a-card">${(month.days||[]).map(day=>{
     const iso=day.date||day.isoDate;const[y,m,d]=iso.split('-').map(Number);const dt=new Date(y,m-1,d);
     return`<div style="padding:10px 0;border-bottom:1px solid rgba(30,48,72,.5)">
