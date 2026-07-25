@@ -3438,7 +3438,10 @@ function parseRoster(rows,headerRowIdx,role,monthEn,monthNp){
     if(!isoDate)continue;
     const[py,pm,pd]=isoDate.split('-').map(Number);if(py<2000||pm<1||pm>12||pd<1||pd>31)continue;
     const key=monthEn||(MONTHS[pm-1]+' '+py);
-    if(!monthsMap[key])monthsMap[key]={name:key,nepali:monthNp||'',days:[]};
+    if(!monthsMap[key]){
+      const{bsY,bsM}=adToBs(isoDate); // needed so each month saves into its OWN Drive file, not a shared/merged one
+      monthsMap[key]={name:key,nepali:monthNp||'',bsYear:bsY,bsMonth:bsM,days:[]};
+    }
     if(monthsMap[key].days.some(d=>d.date===isoDate))continue;
     const duties={};
     for(let ni=0;ni<staffNames.length;ni++){const cell=row[nameStart+ni];duties[staffNames[ni]]=s(cell)||'xx';}
@@ -3553,7 +3556,9 @@ function saveManualMonth(){
   const name=document.getElementById('mm-name').value.trim();const nepali=document.getElementById('mm-nepali').value.trim();const role=document.getElementById('mm-type').value;
   if(!name||!S.manualDays.length){alert('Fill month name and add days');return;}
   if(!S.rosters[role])S.rosters[role]={months:[]};
-  S.rosters[role].months.push({name,nepali,days:S.manualDays.filter(d=>d.date).map(d=>({date:d.date,duties:{}}))});
+  const validDays=S.manualDays.filter(d=>d.date).map(d=>({date:d.date,duties:{}}));
+  const{bsY,bsM}=adToBs(validDays[0].date); // needed so this saves into its OWN Drive file, not a shared/merged one
+  S.rosters[role].months.push({name,nepali,bsYear:bsY,bsMonth:bsM,days:validDays});
   localStorage.setItem('mfd_rosters',JSON.stringify(S.rosters));
   S.manualDays=[];renderManualDays();renderMonthsList();alert('✅ Month saved!');
 }
@@ -4360,17 +4365,18 @@ function renderDashboardChart(){
   if(!el||!S.user)return;
   const role=S.user.role,name=S.user.name;
   const c=getCurrentBsMonth();
-  const rd=S.rosters[role];
-  const months=rd?.months||(Array.isArray(rd)?rd:[]);
-  const month=months.find(m=>m.bsYear===c.bsY&&m.bsMonth===c.bsM);
-  if(!month){el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">No data for current month</div>';return;}
+  const bsDays=bsMonthDays(c.bsY,c.bsM);
   const sumMap={};
-  (month.days||[]).forEach(day=>{
-    const shift=day.duties?.[name]||'';
-    const key=!shift||shift==='xx'||shift==='XX'?'Off':shift;
+  let total=0;
+  for(let bsD=1;bsD<=bsDays;bsD++){
+    const iso=bsToAd(c.bsY,c.bsM,bsD);
+    const shift=getDuty(iso,name,role);
+    if(shift===null)continue; // no roster entry at all for this specific day
+    const key=isOff(shift)?'Off':shift;
     sumMap[key]=(sumMap[key]||0)+1;
-  });
-  const total=Object.values(sumMap).reduce((a,b)=>a+b,0);
+    total++;
+  }
+  if(!total){el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">No data for current month</div>';return;}
   const colors=['#38bdf8','#34d399','#a78bfa','#fbbf24','#f87171','#2dd4bf','#fb923c','#e879f9'];
   const entries=Object.entries(sumMap).sort((a,b)=>b[1]-a[1]);
   // Simple bar chart
@@ -4387,8 +4393,9 @@ function renderDashboardChart(){
       </div>
     </div>`;
   }).join('');
+  const{en}=buildBsHeader(c.bsY,c.bsM);
   el.innerHTML=`<div style="padding:12px 0">
-    <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">📊 ${month.name||''} — Duty Distribution</div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">📊 ${en} — Duty Distribution</div>
     ${bars}
     <button onclick="generateMyDutyPDF(${c.bsY},${c.bsM})" style="margin-top:10px;width:100%;padding:8px;background:var(--accent);color:#000;font-size:12px;font-weight:700;border:none;border-radius:8px;cursor:pointer">📄 Download PDF</button>
   </div>`;
