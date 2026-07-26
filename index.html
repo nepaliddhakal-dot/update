@@ -1143,7 +1143,7 @@ const SHIFT_COLORS={
   'SD':'#5A3080','SM':'#70D018','SMA':'#D0E8B8','SA':'#C0D8E0','SDA':'#C0A8E8',
   // Forecaster
   'MF':'#30E008','AF':'#5A3080','M1':'#30E008','A1':'#60E810','MA':'#B0D888','DA':'#A090E0',
-  'AFN*':'#B00000','NMF*':'#B00000',
+  'AFN*':'#B00000','NMF*':'#B00000','NWP':'#F5A623',
   // Observer
   'MO':'#B8E0F0','AO':'#4A90D9','MO1':'#30E008','AO2':'#4FD1C5','AON*':'#B00000','NMO*':'#B00000'
 };
@@ -1179,6 +1179,7 @@ const DUTY_NAMES={
   'MF':'Morning Forecaster','AF':'Afternoon Forecaster',
   'M1':'Morning Supporter','A1':'Afternoon Supporter',
   'MA':'Morning Aviation Forecaster','DA':'Day Aviation Forecaster',
+  'NWP':'Weather Modeling Section Forecaster',
   'SM':'Sr. Met. Morning','SA':'Sr. Met. Afternoon','SD':'Sr. Met. Day',
   'SMA':'Sr. Met. Aviation (Morning)','SDA':'Sr. Met. Aviation (Day)',
   'AON*':'Day Night Observer★','NMO*':'Night Morning Observer★',
@@ -1190,7 +1191,7 @@ const DUTY_TIMES={
   'MF':'6:00 AM – 12:00 PM','AF':'12:00 PM – 6:00 PM','M1':'6:00 AM – 12:00 PM','A1':'12:00 PM – 6:00 PM',
   'MA':'6:00 AM – 12:00 PM','DA':'12:00 PM – 6:00 PM','SM':'6:00 AM – 12:00 PM','SA':'12:00 PM – 6:00 PM','SD':'12:00 PM – 6:00 PM',
   'SMA':'6:00 AM – 12:00 PM','SDA':'12:00 PM – 6:00 PM','MO':'6:00 AM – 12:00 PM','AO':'12:00 PM – 6:00 PM',
-  'MO1':'6:00 AM – 12:00 PM','AO2':'12:00 PM – 6:00 PM',
+  'MO1':'6:00 AM – 12:00 PM','AO2':'12:00 PM – 6:00 PM','NWP':'9:00 AM – 5:00 PM',
   'AFN*':'12:00 PM – next day 12:00 PM (24 hrs)','NMF*':'Prev. day 12:00 PM – Today 12:00 PM (24 hrs)',
   'AON*':'12:00 PM – next day 12:00 PM (24 hrs)','NMO*':'Prev. day 12:00 PM – Today 12:00 PM (24 hrs)',
   'XX':'','xx':'',''  :''
@@ -2173,19 +2174,21 @@ function frPrintRoster(){
 
   const seen=new Set();
   const sdmList=[],foreList=[],obsList=[];
-  for(const sec of secList){for(const n of(S.staff[sec]?.sdm||[])){if(!seen.has(n)){seen.add(n);sdmList.push(n);}}}
-  for(const sec of secList){for(const n of(S.staff[sec]?.forecaster||[])){if(!seen.has(n)){seen.add(n);foreList.push(n);}}}
-  for(const sec of secList){for(const n of(S.staff[sec]?.observer||[])){if(!seen.has(n)){seen.add(n);obsList.push(n);}}}
+  for(const sec of secList){for(const n of(S.staff[sec]?.sdm||[])){if(!seen.has(n)&&hasAnyDutyInMonth(n,'sdm',bsY,bsM)){seen.add(n);sdmList.push(n);}}}
+  for(const sec of secList){for(const n of(S.staff[sec]?.forecaster||[])){if(!seen.has(n)&&hasAnyDutyInMonth(n,'forecaster',bsY,bsM)){seen.add(n);foreList.push(n);}}}
+  for(const sec of secList){for(const n of(S.staff[sec]?.observer||[])){if(!seen.has(n)&&hasAnyDutyInMonth(n,'observer',bsY,bsM)){seen.add(n);obsList.push(n);}}}
   const allStaff=[
     ...sdmList.map(n=>({name:n,role:'sdm'})),
     ...foreList.map(n=>({name:n,role:'forecaster'})),
     ...obsList.map(n=>({name:n,role:'observer'}))
   ];
-  if(!allStaff.length){alert('No staff found for this section.');return;}
+  if(!allStaff.length){alert('No staff with roster data for this month yet.');return;}
 
-  // Shrink font as staff count grows, so a full month still fits one landscape page
+  // Shrink font as staff count grows, so a full month still fits one landscape page.
+  // Name row gets its own larger/bolder size — it's the most important thing to read at a glance.
   const n=allStaff.length;
   const fs=n>16?'6px':n>12?'6.5px':n>8?'7.5px':'9px';
+  const nameFs=n>16?'8px':n>12?'8.5px':n>8?'9.5px':'11px';
   const padY=n>12?'2px':'3px';
 
   let h1=`<th rowspan="2" class="dc-h">Date</th>`;
@@ -2193,7 +2196,7 @@ function frPrintRoster(){
   if(foreList.length)h1+=`<th colspan="${foreList.length}" class="grp grp-fore">🌤️ Forecaster (${foreList.length})</th>`;
   if(obsList.length)h1+=`<th colspan="${obsList.length}" class="grp grp-obs">🔭 Observer (${obsList.length})</th>`;
   let h2='';
-  for(const{name}of allStaff)h2+=`<th>${name}</th>`;
+  for(const{name}of allStaff)h2+=`<th class="name-h">${name}</th>`;
 
   let tbody='';
   for(let bsD=1;bsD<=bsDays;bsD++){
@@ -2223,6 +2226,7 @@ h1{font-size:15px;margin:0 0 2px;color:#0f2942}
 table{border-collapse:collapse;width:100%;table-layout:fixed}
 th,td{border:1px solid #888;padding:${padY} 3px;text-align:center;font-size:${fs};overflow:hidden;white-space:nowrap}
 th{background:#0f2942;color:#fff;font-weight:700}
+th.name-h{font-size:${nameFs};font-weight:800;letter-spacing:.2px}
 th.grp-sdm{background:#7c3aed}
 th.grp-fore{background:#0284c7}
 th.grp-obs{background:#059669}
@@ -2240,7 +2244,7 @@ ${officialLetterheadHtml(secTitle)}
 <div class="meta"><b>Month:</b> ${np} (${en}) &nbsp;|&nbsp; <b>Total Staff:</b> ${allStaff.length} &nbsp;|&nbsp; <b>Generated:</b> ${new Date().toLocaleString()}</div>
 <table><thead><tr>${h1}</tr><tr>${h2}</tr></thead><tbody>${tbody}</tbody></table>
 <div class="legend">
-${[['MF','Morning Forecaster (6AM–12PM)'],['AF','Afternoon Forecaster (12PM–6PM)'],['AFN★','Day Night Forecaster (12PM–next 12PM)'],['NMF★','Night Morning Forecaster (prev 12PM–today 12PM)'],['MA','Morning Aviation Forecaster (6AM–12PM)'],['DA','Day Aviation Forecaster (12PM–6PM)'],['SM','Sr. Met. Morning (6AM–12PM)'],['SA','Sr. Met. Afternoon (12PM–6PM)'],['SD','Sr. Met. Day (12PM–6PM)'],['SMA','Sr. Met. Aviation Morning (6AM–12PM)'],['SDA','Sr. Met. Aviation Day (12PM–6PM)'],['MO','Morning Observer (6AM–12PM)'],['AO','Afternoon Observer (12PM–6PM)'],['AON★','Day Night Observer (12PM–next 12PM)'],['NMO★','Night Morning Observer (prev 12PM–today 12PM)'],['MO1','Morning Supporting Observer (6AM–12PM)'],['AO2','Afternoon Supporting Observer (12PM–6PM)'],['M1','Morning Supporter (6AM–12PM)'],['A1','Afternoon Supporter (12PM–6PM)'],['Off/xx','Duty Off']]
+${[['MF','Morning Forecaster (6AM–12PM)'],['AF','Afternoon Forecaster (12PM–6PM)'],['AFN★','Day Night Forecaster (12PM–next 12PM)'],['NMF★','Night Morning Forecaster (prev 12PM–today 12PM)'],['MA','Morning Aviation Forecaster (6AM–12PM)'],['DA','Day Aviation Forecaster (12PM–6PM)'],['NWP','Weather Modeling Section Forecaster (9AM–5PM)'],['SM','Sr. Met. Morning (6AM–12PM)'],['SA','Sr. Met. Afternoon (12PM–6PM)'],['SD','Sr. Met. Day (12PM–6PM)'],['SMA','Sr. Met. Aviation Morning (6AM–12PM)'],['SDA','Sr. Met. Aviation Day (12PM–6PM)'],['MO','Morning Observer (6AM–12PM)'],['AO','Afternoon Observer (12PM–6PM)'],['AON★','Day Night Observer (12PM–next 12PM)'],['NMO★','Night Morning Observer (prev 12PM–today 12PM)'],['MO1','Morning Supporting Observer (6AM–12PM)'],['AO2','Afternoon Supporting Observer (12PM–6PM)'],['M1','Morning Supporter (6AM–12PM)'],['A1','Afternoon Supporter (12PM–6PM)'],['Off/xx','Duty Off']]
   .map(([code,desc])=>`<div><b>${code}</b> — ${desc}</div>`).join('')}
 </div>
 <script>window.onload=()=>setTimeout(()=>window.print(),150);<\/script>
@@ -2322,7 +2326,7 @@ function renderAdminFullRoster(){
     }
     tbody+=`<tr class="${isT?'today-row':''}">${tr}</tr>`;
   }
-  const legendRows=[['MF','Morning Forecaster','6:00 AM – 12:00 PM'],['AF','Afternoon Forecaster','12:00 PM – 6:00 PM'],['AFN★','Day Night Forecaster','12:00 PM – next day 12:00 PM'],['NMF★','Night Morning Forecaster','Prev. day 12:00 PM – Today 12:00 PM'],['MA','Morning Aviation Forecaster','6:00 AM – 12:00 PM'],['DA','Day Aviation Forecaster','12:00 PM – 6:00 PM'],['SM','Sr. Met. Morning','6:00 AM – 12:00 PM'],['SA','Sr. Met. Afternoon','12:00 PM – 6:00 PM'],['SD','Sr. Met. Day','12:00 PM – 6:00 PM'],['SMA','Sr. Met. Aviation Morning','6:00 AM – 12:00 PM'],['SDA','Sr. Met. Aviation Day','12:00 PM – 6:00 PM'],['MO','Morning Observer','6:00 AM – 12:00 PM'],['AO','Afternoon Observer','12:00 PM – 6:00 PM'],['AON★','Day Night Observer','12:00 PM – next day 12:00 PM'],['NMO★','Night Morning Observer','Prev. day 12:00 PM – Today 12:00 PM'],['MO1','Morning Supporting Observer','6:00 AM – 12:00 PM'],['AO2','Afternoon Supporting Observer','12:00 PM – 6:00 PM'],['M1','Morning Supporter','6:00 AM – 12:00 PM'],['A1','Afternoon Supporter','12:00 PM – 6:00 PM'],['Off/xx','Duty Off','—']];
+  const legendRows=[['MF','Morning Forecaster','6:00 AM – 12:00 PM'],['AF','Afternoon Forecaster','12:00 PM – 6:00 PM'],['AFN★','Day Night Forecaster','12:00 PM – next day 12:00 PM'],['NMF★','Night Morning Forecaster','Prev. day 12:00 PM – Today 12:00 PM'],['MA','Morning Aviation Forecaster','6:00 AM – 12:00 PM'],['DA','Day Aviation Forecaster','12:00 PM – 6:00 PM'],['NWP','Weather Modeling Section Forecaster','9:00 AM – 5:00 PM'],['SM','Sr. Met. Morning','6:00 AM – 12:00 PM'],['SA','Sr. Met. Afternoon','12:00 PM – 6:00 PM'],['SD','Sr. Met. Day','12:00 PM – 6:00 PM'],['SMA','Sr. Met. Aviation Morning','6:00 AM – 12:00 PM'],['SDA','Sr. Met. Aviation Day','12:00 PM – 6:00 PM'],['MO','Morning Observer','6:00 AM – 12:00 PM'],['AO','Afternoon Observer','12:00 PM – 6:00 PM'],['AON★','Day Night Observer','12:00 PM – next day 12:00 PM'],['NMO★','Night Morning Observer','Prev. day 12:00 PM – Today 12:00 PM'],['MO1','Morning Supporting Observer','6:00 AM – 12:00 PM'],['AO2','Afternoon Supporting Observer','12:00 PM – 6:00 PM'],['M1','Morning Supporter','6:00 AM – 12:00 PM'],['A1','Afternoon Supporter','12:00 PM – 6:00 PM'],['Off/xx','Duty Off','—']];
   document.getElementById('afr-table').innerHTML=`<table class="roster-table"><thead><tr>${h1}</tr><tr>${h2}</tr></thead><tbody>${tbody}</tbody></table>
   <div id="afr-legend" style="margin-top:24px;padding:14px 4px">
     <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">📋 Duty Legend</div>
@@ -2353,18 +2357,19 @@ function adminFrPrintRoster(){
 
   const seen=new Set();
   const sdmList=[],foreList=[],obsList=[];
-  for(const sec of secList){for(const n of(S.staff[sec]?.sdm||[])){if(!seen.has(n)){seen.add(n);sdmList.push(n);}}}
-  for(const sec of secList){for(const n of(S.staff[sec]?.forecaster||[])){if(!seen.has(n)){seen.add(n);foreList.push(n);}}}
-  for(const sec of secList){for(const n of(S.staff[sec]?.observer||[])){if(!seen.has(n)){seen.add(n);obsList.push(n);}}}
+  for(const sec of secList){for(const n of(S.staff[sec]?.sdm||[])){if(!seen.has(n)&&hasAnyDutyInMonth(n,'sdm',bsY,bsM)){seen.add(n);sdmList.push(n);}}}
+  for(const sec of secList){for(const n of(S.staff[sec]?.forecaster||[])){if(!seen.has(n)&&hasAnyDutyInMonth(n,'forecaster',bsY,bsM)){seen.add(n);foreList.push(n);}}}
+  for(const sec of secList){for(const n of(S.staff[sec]?.observer||[])){if(!seen.has(n)&&hasAnyDutyInMonth(n,'observer',bsY,bsM)){seen.add(n);obsList.push(n);}}}
   const allStaff=[
     ...sdmList.map(n=>({name:n,role:'sdm'})),
     ...foreList.map(n=>({name:n,role:'forecaster'})),
     ...obsList.map(n=>({name:n,role:'observer'}))
   ];
-  if(!allStaff.length){alert('No staff found for this section.');return;}
+  if(!allStaff.length){alert('No staff with roster data for this month yet.');return;}
 
   const n=allStaff.length;
   const fs=n>16?'6px':n>12?'6.5px':n>8?'7.5px':'9px';
+  const nameFs=n>16?'8px':n>12?'8.5px':n>8?'9.5px':'11px';
   const padY=n>12?'2px':'3px';
 
   let h1=`<th rowspan="2" class="dc-h">Date</th>`;
@@ -2372,7 +2377,7 @@ function adminFrPrintRoster(){
   if(foreList.length)h1+=`<th colspan="${foreList.length}" class="grp grp-fore">🌤️ Forecaster (${foreList.length})</th>`;
   if(obsList.length)h1+=`<th colspan="${obsList.length}" class="grp grp-obs">🔭 Observer (${obsList.length})</th>`;
   let h2='';
-  for(const{name}of allStaff)h2+=`<th>${name}</th>`;
+  for(const{name}of allStaff)h2+=`<th class="name-h">${name}</th>`;
 
   let tbody='';
   for(let bsD=1;bsD<=bsDays;bsD++){
@@ -2402,6 +2407,7 @@ h1{font-size:15px;margin:0 0 2px;color:#0f2942}
 table{border-collapse:collapse;width:100%;table-layout:fixed}
 th,td{border:1px solid #888;padding:${padY} 3px;text-align:center;font-size:${fs};overflow:hidden;white-space:nowrap}
 th{background:#0f2942;color:#fff;font-weight:700}
+th.name-h{font-size:${nameFs};font-weight:800;letter-spacing:.2px}
 th.grp-sdm{background:#7c3aed}
 th.grp-fore{background:#0284c7}
 th.grp-obs{background:#059669}
@@ -2525,6 +2531,7 @@ function renderFullRoster(){
     ['NMF★','Night Morning Forecaster','Prev. day 12:00 PM – Today 12:00 PM'],
     ['MA','Morning Aviation Forecaster','6:00 AM – 12:00 PM'],
     ['DA','Day Aviation Forecaster','12:00 PM – 6:00 PM'],
+    ['NWP','Weather Modeling Section Forecaster','9:00 AM – 5:00 PM'],
     ['SM','Sr. Met. Morning','6:00 AM – 12:00 PM'],
     ['SA','Sr. Met. Afternoon','12:00 PM – 6:00 PM'],
     ['SD','Sr. Met. Day','12:00 PM – 6:00 PM'],
