@@ -462,8 +462,9 @@ textarea.fi{resize:vertical;min-height:80px}
         <div class="msc-name" id="msc-name">--</div>
         <div id="msc-time" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
       </div>
-      <div id="weekly-forecaster-card" style="display:none;margin:0 12px 10px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px">
-        <span style="font-size:16px">🗓️</span><span>Weekly Forecaster this week: <b style="color:var(--text)" id="weekly-forecaster-name">--</b></span>
+      <div id="weekly-forecaster-card" style="display:none;margin:0 12px 10px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px;font-size:12px;color:var(--text2);display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span><span style="font-size:16px">🗓️</span> Weekly Forecaster this week: <b style="color:var(--text)" id="weekly-forecaster-name">--</b></span>
+        <button onclick="openWeeklyForecasterHistoryModal()" style="background:none;border:none;color:var(--accent);font-size:11px;font-weight:700;cursor:pointer;padding:2px 4px;white-space:nowrap">🔄 History</button>
       </div>
       <button id="swap-fab" onclick="openSwapModal()" style="margin:0 12px 10px;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);color:var(--accent);font-size:13px;font-weight:600;padding:10px;border-radius:var(--radius);width:calc(100% - 24px)">📨 Request Duty Change / ड्युटि परिवर्तन अनुरोध</button>
       <div class="handover-card" id="handover-card" style="display:none;margin:0 12px 10px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:12px">
@@ -601,6 +602,21 @@ textarea.fi{resize:vertical;min-height:80px}
     </div>
     <div style="padding:0 18px">
       <button class="btn-outline" onclick="document.getElementById('extranight-modal').style.display='none'" style="width:100%">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- WEEKLY FORECASTER TURN HISTORY — read-only, Weather Forecasting Section Forecasters only -->
+<div id="wfhistory-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1001;align-items:flex-end;justify-content:center">
+  <div style="background:var(--bg2);border-radius:20px 20px 0 0;width:100%;max-width:520px;padding:0 0 max(20px,env(safe-area-inset-bottom));max-height:90vh;overflow-y:auto;animation:slideUp .3s ease">
+    <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 14px"></div>
+    <div style="font-size:16px;font-weight:700;padding:0 18px 12px;border-bottom:1px solid var(--border)">🔄 Weekly Forecaster Turn History</div>
+    <div style="font-size:11px;color:var(--text3);padding:10px 18px 0">Fewest weeks / longest since last turn shown first — an easy reference for whose turn is next.</div>
+    <div id="wfhistory-body" style="padding:10px 18px 20px">
+      <div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">⏳ Loading...</div>
+    </div>
+    <div style="padding:0 18px">
+      <button class="btn-outline" onclick="document.getElementById('wfhistory-modal').style.display='none'" style="width:100%">Close</button>
     </div>
   </div>
 </div>
@@ -830,7 +846,7 @@ textarea.fi{resize:vertical;min-height:80px}
 
       <!-- Weekly Forecaster — ONE person assigned per whole week, separate from daily duty codes -->
       <div class="a-card-title">🗓️ Weekly Forecaster Schedule</div>
-      <div class="a-info">Assign one person as Weekly Forecaster for a whole week (Mon–Sun) — this is separate from their normal daily duty codes. Shows on their Today tab and everyone else's for that week.</div>
+      <div class="a-info">Assign one person as Weekly Forecaster for a whole week (Saturday–Friday) — this is separate from their normal daily duty codes. Only Weather Forecasting Section Forecasters can be assigned. Shows on their Today tab for that week, and a reminder notification goes out Wednesday evening and Thursday morning.</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">
         <select class="fi" id="wf-staff" style="flex:1;min-width:160px;padding:6px 10px;font-size:12px"><option value="">-- Select staff --</option></select>
         <input class="fi" type="date" id="wf-weekstart" onchange="wfUpdateWeekEndPreview()" style="width:150px;padding:6px 10px;font-size:12px"/>
@@ -844,7 +860,7 @@ textarea.fi{resize:vertical;min-height:80px}
 
       <!-- Extra Night Coverage Log — a simple history, not auto-assignment -->
       <div class="a-card-title">🌙 Extra Night Coverage Log</div>
-      <div class="a-info">Log it whenever someone covers an extra night (e.g. filling in because a colleague on the night rotation took leave). Builds a history so it's easy to see whose turn is next — fewest/oldest logged entries first.</div>
+      <div class="a-info">For TIA Aviation Met Section Forecasters and Observers only. Log it whenever someone covers an extra night (e.g. filling in because a colleague on the night rotation took leave). Builds a history so it's easy to see whose turn is next — fewest/oldest logged entries first. Forecasters and Observers each only see their own role's history.</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">
         <select class="fi" id="en-staff" style="flex:1;min-width:160px;padding:6px 10px;font-size:12px"><option value="">-- Select staff --</option></select>
         <input class="fi" type="date" id="en-date" style="width:150px;padding:6px 10px;font-size:12px"/>
@@ -4782,9 +4798,15 @@ function initLeaveBalanceYearInput(){
     .map(s=>`<option value="${s.name}" data-role="${s.role}">${s.name} (${RLABEL[s.role]||s.role}, ${s.section==='avia'?'Aviation':'Weather'})</option>`).join('');
   const loStaff=document.getElementById('lo-staff'); if(loStaff&&!loStaff.dataset.filled){loStaff.innerHTML='<option value="">-- Select staff --</option>'+staffOptsHtml;loStaff.dataset.filled='1';}
   const lgStaff=document.getElementById('lg-staff'); if(lgStaff&&!lgStaff.dataset.filled){lgStaff.innerHTML='<option value="">-- All Staff --</option>'+staffOptsHtml;lgStaff.dataset.filled='1';}
-  const wfStaff=document.getElementById('wf-staff'); if(wfStaff&&!wfStaff.dataset.filled){wfStaff.innerHTML='<option value="">-- Select staff --</option>'+staffOptsHtml;wfStaff.dataset.filled='1';}
-  const enStaff=document.getElementById('en-staff'); if(enStaff&&!enStaff.dataset.filled){enStaff.innerHTML='<option value="">-- Select staff --</option>'+staffOptsHtml;enStaff.dataset.filled='1';}
-  const wfDate=document.getElementById('wf-weekstart'); if(wfDate&&!wfDate.value){wfDate.value=todayISO();wfUpdateWeekEndPreview();}
+  // Weekly Forecaster is a Weather Forecasting Section (public forecaster) thing only
+  const wfOptsHtml=(S.staffFlat||[]).filter(s=>s.role==='forecaster'&&s.section==='weather').sort((a,b)=>a.name.localeCompare(b.name))
+    .map(s=>`<option value="${s.name}" data-role="${s.role}">${s.name}</option>`).join('');
+  const wfStaff=document.getElementById('wf-staff'); if(wfStaff&&!wfStaff.dataset.filled){wfStaff.innerHTML='<option value="">-- Select staff --</option>'+wfOptsHtml;wfStaff.dataset.filled='1';}
+  // Extra Night Log is for TIA Aviation Met Section Forecasters + Observers only (24hr night rotation)
+  const enOptsHtml=(S.staffFlat||[]).filter(s=>s.section==='avia'&&(s.role==='forecaster'||s.role==='observer')).sort((a,b)=>a.name.localeCompare(b.name))
+    .map(s=>`<option value="${s.name}" data-role="${s.role}">${s.name} (${RLABEL[s.role]})</option>`).join('');
+  const enStaff=document.getElementById('en-staff'); if(enStaff&&!enStaff.dataset.filled){enStaff.innerHTML='<option value="">-- Select staff --</option>'+enOptsHtml;enStaff.dataset.filled='1';}
+  const wfDate=document.getElementById('wf-weekstart'); if(wfDate&&!wfDate.value){wfDate.value=wfSnapToSaturday(todayISO());wfUpdateWeekEndPreview();}
   const enDate=document.getElementById('en-date'); if(enDate&&!enDate.value)enDate.value=todayISO();
   loadWeeklyForecasterList();
   loadExtraNightAdminList();
@@ -4982,10 +5004,20 @@ function wfWeekEndFromStart(startIso){
   d.setUTCDate(d.getUTCDate()+6);
   return d.toISOString().slice(0,10);
 }
+// Weeks run Saturday → Friday, so any picked date snaps back to that week's Saturday.
+function wfSnapToSaturday(iso){
+  const d=new Date(iso+'T00:00:00Z');
+  const dow=d.getUTCDay(); // 0=Sun..6=Sat, Saturday=6
+  const diff=(dow-6+7)%7;
+  d.setUTCDate(d.getUTCDate()-diff);
+  return d.toISOString().slice(0,10);
+}
 function wfUpdateWeekEndPreview(){
   const startEl=document.getElementById('wf-weekstart'),prevEl=document.getElementById('wf-weekend-preview');
   if(!startEl||!startEl.value||!prevEl)return;
-  prevEl.textContent='Week: '+startEl.value+' → '+wfWeekEndFromStart(startEl.value);
+  const snapped=wfSnapToSaturday(startEl.value);
+  if(snapped!==startEl.value)startEl.value=snapped;
+  prevEl.textContent='Week (Sat–Fri): '+snapped+' → '+wfWeekEndFromStart(snapped);
 }
 async function saveWeeklyForecaster(){
   const staffSel=document.getElementById('wf-staff');
@@ -5006,6 +5038,20 @@ async function saveWeeklyForecaster(){
     loadWeeklyForecasterList();
   }catch(e){alert('❌ Could not save — check connection.');}
 }
+// Shared by both Weekly Forecaster and Extra Night — ranks by fewest turns,
+// then longest time since their last turn, so the top of the list is
+// roughly "whose turn is next."
+function turnSummarize(rows,nameKey,dateKey){
+  const byStaff={};
+  rows.forEach(r=>{
+    const name=r[nameKey],date=r[dateKey];
+    if(!name)return;
+    if(!byStaff[name])byStaff[name]={staffName:name,count:0,lastDate:''};
+    byStaff[name].count++;
+    if(date>byStaff[name].lastDate)byStaff[name].lastDate=date;
+  });
+  return Object.values(byStaff).sort((a,b)=> a.count-b.count || a.lastDate.localeCompare(b.lastDate));
+}
 async function loadWeeklyForecasterList(){
   const el=document.getElementById('weekly-forecaster-list'); if(!el)return;
   el.innerHTML='<div style="color:var(--text3);font-size:12px">⏳ Loading...</div>';
@@ -5015,12 +5061,43 @@ async function loadWeeklyForecasterList(){
     const rows=(d.data||[]).slice().sort((a,b)=>b.weekStart.localeCompare(a.weekStart));
     S.weeklyForecasterCache=rows;
     if(!rows.length){el.innerHTML='<div style="color:var(--text3);font-size:12px">No weeks assigned yet.</div>';return;}
-    el.innerHTML='<div style="display:flex;flex-direction:column;gap:6px">'+rows.map(r=>`
+    const summary=turnSummarize(rows,'staffName','weekStart');
+    el.innerHTML=
+      '<div style="font-size:11px;font-weight:700;color:var(--text2);margin:4px 0 6px">Fewest turns / longest since last, first:</div>'+
+      '<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px">'+summary.map(s=>
+        `<div style="display:flex;justify-content:space-between;background:var(--card2);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:11px">
+          <span style="color:var(--text)">${s.staffName}</span>
+          <span style="color:var(--text3)">${s.count} week(s) — last started ${s.lastDate}</span>
+        </div>`).join('')+'</div>'+
+      '<div style="font-size:11px;font-weight:700;color:var(--text2);margin:6px 0">Full schedule:</div>'+
+      '<div style="display:flex;flex-direction:column;gap:6px">'+rows.map(r=>`
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:8px 10px;font-size:11px">
         <div>${r.weekStart} → ${r.weekEnd} — <b style="color:var(--text)">${r.staffName}</b>${r.note?' <span style="color:var(--text3)">('+r.note+')</span>':''}</div>
         <button onclick="deleteWeeklyForecaster('${r.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 4px" title="Delete">🗑️</button>
       </div>`).join('')+'</div>';
   }catch(e){el.innerHTML='<div style="color:var(--red);font-size:12px">Could not load — check connection.</div>';}
+}
+// Read-only turn history for staff (Weather Forecasting Section Forecasters only)
+async function openWeeklyForecasterHistoryModal(){
+  if(!S.user||S.user.role!=='forecaster'||S.user.section!=='weather'){
+    alert('This is for Weather Forecasting Section Forecasters.');
+    return;
+  }
+  document.getElementById('wfhistory-modal').style.display='flex';
+  const bodyEl=document.getElementById('wfhistory-body');
+  bodyEl.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">⏳ Loading...</div>';
+  try{
+    const res=await fetch(S.scriptUrl+'?action=getWeeklyForecasters');
+    const d=await res.json();
+    const rows=d.data||[];
+    if(!rows.length){bodyEl.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">No weeks assigned yet.</div>';return;}
+    const summary=turnSummarize(rows,'staffName','weekStart');
+    bodyEl.innerHTML='<div style="display:flex;flex-direction:column;gap:6px">'+summary.map((s,i)=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px;font-size:12px${s.staffName===S.user.name?';border-color:var(--accent)':''}">
+        <span style="color:var(--text);font-weight:${s.staffName===S.user.name?'800':'600'}">${i===0?'👉 ':''}${s.staffName}${s.staffName===S.user.name?' (you)':''}</span>
+        <span style="color:var(--text3)">${s.count} week(s) — last started ${s.lastDate}</span>
+      </div>`).join('')+'</div>';
+  }catch(e){bodyEl.innerHTML='<div style="color:var(--red);font-size:12px;text-align:center;padding:20px">Could not load — check connection.</div>';}
 }
 async function deleteWeeklyForecaster(id){
   if(!confirm('Remove this week\'s assignment?'))return;
@@ -5032,18 +5109,16 @@ async function deleteWeeklyForecaster(id){
     loadWeeklyForecasterList();
   }catch(e){alert('❌ Could not delete — check connection.');}
 }
-// Shows "Weekly Forecaster this week: X" on the Today tab, for the CURRENT Mon–Sun week
+// Shows "Weekly Forecaster this week: X" on the Today tab, for the CURRENT Sat–Fri week
 async function updateWeeklyForecasterBanner(){
   const card=document.getElementById('weekly-forecaster-card'); if(!card)return;
+  // This rotation only applies to Weather Forecasting Section (public) Forecasters
+  if(!S.user||S.user.role!=='forecaster'||S.user.section!=='weather'){card.style.display='none';return;}
   try{
     const res=await fetch(S.scriptUrl+'?action=getWeeklyForecasters');
     const d=await res.json();
-    const today=new Date(todayISO()+'T00:00:00Z');
-    const dow=today.getUTCDay(); // 0=Sun..6=Sat
-    const mondayOffset=dow===0?-6:1-dow; // days to subtract to reach this week's Monday
-    const monday=new Date(today); monday.setUTCDate(monday.getUTCDate()+mondayOffset);
-    const mondayIso=monday.toISOString().slice(0,10);
-    const match=(d.data||[]).find(r=>r.weekStart===mondayIso);
+    const satIso=wfSnapToSaturday(todayISO());
+    const match=(d.data||[]).find(r=>r.weekStart===satIso);
     if(match){
       document.getElementById('weekly-forecaster-name').textContent=match.staffName;
       card.style.display='flex';
@@ -5072,17 +5147,6 @@ async function saveExtraNightLog(){
     loadExtraNightAdminList();
   }catch(e){alert('❌ Could not save — check connection.');}
 }
-function extraNightSummarize(rows){
-  // One row per person: count + most recent date, sorted fewest/oldest first
-  // (that's roughly "whose turn is next" at a glance).
-  const byStaff={};
-  rows.forEach(r=>{
-    if(!byStaff[r.staffName])byStaff[r.staffName]={staffName:r.staffName,count:0,lastDate:''};
-    byStaff[r.staffName].count++;
-    if(r.date>byStaff[r.staffName].lastDate)byStaff[r.staffName].lastDate=r.date;
-  });
-  return Object.values(byStaff).sort((a,b)=> a.count-b.count || a.lastDate.localeCompare(b.lastDate));
-}
 async function loadExtraNightAdminList(){
   const el=document.getElementById('extranight-admin-list'); if(!el)return;
   el.innerHTML='<div style="color:var(--text3);font-size:12px">⏳ Loading...</div>';
@@ -5091,7 +5155,7 @@ async function loadExtraNightAdminList(){
     const d=await res.json();
     const rows=d.data||[];
     if(!rows.length){el.innerHTML='<div style="color:var(--text3);font-size:12px">No extra nights logged yet.</div>';return;}
-    const summary=extraNightSummarize(rows);
+    const summary=turnSummarize(rows,'staffName','date');
     const chronological=rows.slice().sort((a,b)=>b.date.localeCompare(a.date));
     el.innerHTML=
       '<div style="font-size:11px;font-weight:700;color:var(--text2);margin:4px 0 6px">Fewest/oldest first (likely next in line):</div>'+
@@ -5103,7 +5167,7 @@ async function loadExtraNightAdminList(){
       '<div style="font-size:11px;font-weight:700;color:var(--text2);margin:6px 0">Full log:</div>'+
       '<div style="display:flex;flex-direction:column;gap:6px">'+chronological.map(r=>`
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:8px 10px;font-size:11px">
-          <div>${r.date} — <b style="color:var(--text)">${r.staffName}</b>${r.note?' <span style="color:var(--text3)">('+r.note+')</span>':''}</div>
+          <div>${r.date} — <b style="color:var(--text)">${r.staffName}</b> <span style="color:var(--text3)">(${RLABEL[r.staffRole]||r.staffRole})</span>${r.note?' <span style="color:var(--text3)">('+r.note+')</span>':''}</div>
           <button onclick="deleteExtraNightLog('${r.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 4px" title="Delete">🗑️</button>
         </div>`).join('')+'</div>';
   }catch(e){el.innerHTML='<div style="color:var(--red);font-size:12px">Could not load — check connection.</div>';}
@@ -5117,18 +5181,23 @@ async function deleteExtraNightLog(id){
     loadExtraNightAdminList();
   }catch(e){alert('❌ Could not delete — check connection.');}
 }
-// Read-only view for staff (opened from My Duties)
+// Read-only view for staff (opened from My Duties) — TIA Aviation Met Section
+// Forecasters/Observers only, and only shows their OWN role's peers (not the other role)
 async function openExtraNightModal(){
   if(!S.user){alert('Please login first');return;}
+  if(S.user.section!=='avia'||(S.user.role!=='forecaster'&&S.user.role!=='observer')){
+    alert('This is for TIA Aviation Met Section Forecasters and Observers.');
+    return;
+  }
   document.getElementById('extranight-modal').style.display='flex';
   const bodyEl=document.getElementById('extranight-body');
   bodyEl.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">⏳ Loading...</div>';
   try{
     const res=await fetch(S.scriptUrl+'?action=getExtraNightLog');
     const d=await res.json();
-    const rows=d.data||[];
-    if(!rows.length){bodyEl.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">No extra nights logged yet.</div>';return;}
-    const summary=extraNightSummarize(rows);
+    const rows=(d.data||[]).filter(r=>r.staffRole===S.user.role);
+    if(!rows.length){bodyEl.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">No extra nights logged yet for '+RLABEL[S.user.role]+'s.</div>';return;}
+    const summary=turnSummarize(rows,'staffName','date');
     bodyEl.innerHTML='<div style="display:flex;flex-direction:column;gap:6px">'+summary.map((s,i)=>`
       <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px;font-size:12px${s.staffName===S.user.name?';border-color:var(--accent)':''}">
         <span style="color:var(--text);font-weight:${s.staffName===S.user.name?'800':'600'}">${i===0?'👉 ':''}${s.staffName}${s.staffName===S.user.name?' (you)':''}</span>
