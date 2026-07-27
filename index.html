@@ -860,7 +860,7 @@ textarea.fi{resize:vertical;min-height:80px}
 
       <!-- Extra Night Coverage Log — a simple history, not auto-assignment -->
       <div class="a-card-title">🌙 Extra Night Coverage Log</div>
-      <div class="a-info">For TIA Aviation Met Section Forecasters and Observers only. Log it whenever someone covers an extra night (e.g. filling in because a colleague on the night rotation took leave). Builds a history so it's easy to see whose turn is next — fewest/oldest logged entries first. Forecasters and Observers each only see their own role's history.</div>
+      <div class="a-info">For TIA Aviation Met Section Forecasters and Observers only. Entries get added two ways: manually below, or automatically whenever you approve a Duty Change Request that results in AFN*/NMF*/AON*/NMO* (the 24hr combined night codes) — no extra step needed for those. Builds a history so it's easy to see whose turn is next — fewest/oldest logged entries first. Forecasters and Observers each only see their own role's history.</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">
         <select class="fi" id="en-staff" style="flex:1;min-width:160px;padding:6px 10px;font-size:12px"><option value="">-- Select staff --</option></select>
         <input class="fi" type="date" id="en-date" style="width:150px;padding:6px 10px;font-size:12px"/>
@@ -4285,7 +4285,7 @@ async function resolveBatch(batchId,encodedRows,status){
     try{
       await fetch(S.scriptUrl,{method:'POST',body:JSON.stringify({
         action:'resolveSwapRequest',rowIndex:r.rowIndex,fileId:r.fileId||'',user:r.user,role:r.role,
-        section:r.section,date:r.date,requested:r.requested,status,adminNote
+        section:r.section,date:r.date,requested:r.requested,status,adminNote,actorName:S.currentAdmin?.name||'Admin'
       })});
       ok++;
     }catch(e){fail++;}
@@ -4306,7 +4306,8 @@ async function resolveRequest(rowIndex,fileId,user,role,section,date,requested,s
       method:'POST',
       body:JSON.stringify({
         action:'resolveSwapRequest',
-        rowIndex, fileId:fileId||'', user, role, section, date, requested, status, adminNote, current, swapWith
+        rowIndex, fileId:fileId||'', user, role, section, date, requested, status, adminNote, current, swapWith,
+        actorName:S.currentAdmin?.name||'Admin'
       })
     });
     alert('✅ '+status+'! Roster updated and staff notified.'+(status==='Approved'?' Section-wide notification पनि पठाइयो।':'')+(status==='Approved'&&swapWith?' '+swapWith+"'s duty was also updated.":''));
