@@ -5078,8 +5078,18 @@ async function loadWeeklyForecasterList(){
   }catch(e){el.innerHTML='<div style="color:var(--red);font-size:12px">Could not load — check connection.</div>';}
 }
 // Read-only turn history for staff (Weather Forecasting Section Forecasters only)
+// Checks actual staff-list membership (S.staff), not just which section you
+// happen to be logged in as right now — so someone in BOTH sections still
+// sees the right features regardless of which one they picked at login.
+function isWeatherForecasterByStaffData(){
+  return !!(S.user && S.staff && S.staff.weather && (S.staff.weather.forecaster||[]).includes(S.user.name));
+}
+function isAviaForecasterOrObserverByStaffData(){
+  if(!S.user||!S.staff||!S.staff.avia)return false;
+  return (S.staff.avia.forecaster||[]).includes(S.user.name) || (S.staff.avia.observer||[]).includes(S.user.name);
+}
 async function openWeeklyForecasterHistoryModal(){
-  if(!S.user||S.user.role!=='forecaster'||S.user.section!=='weather'){
+  if(!S.user||!isWeatherForecasterByStaffData()){
     alert('This is for Weather Forecasting Section Forecasters.');
     return;
   }
@@ -5112,8 +5122,10 @@ async function deleteWeeklyForecaster(id){
 // Shows "Weekly Forecaster this week: X" on the Today tab, for the CURRENT Sat–Fri week
 async function updateWeeklyForecasterBanner(){
   const card=document.getElementById('weekly-forecaster-card'); if(!card)return;
-  // This rotation only applies to Weather Forecasting Section (public) Forecasters
-  if(!S.user||S.user.role!=='forecaster'||S.user.section!=='weather'){card.style.display='none';return;}
+  // This rotation only applies to Weather Forecasting Section (public) Forecasters —
+  // checked by staff-list membership, so it still shows if you're logged in under
+  // Aviation this session but also belong to the Weather forecaster list.
+  if(!isWeatherForecasterByStaffData()){card.style.display='none';return;}
   try{
     const res=await fetch(S.scriptUrl+'?action=getWeeklyForecasters');
     const d=await res.json();
@@ -5185,7 +5197,7 @@ async function deleteExtraNightLog(id){
 // Forecasters/Observers only, and only shows their OWN role's peers (not the other role)
 async function openExtraNightModal(){
   if(!S.user){alert('Please login first');return;}
-  if(S.user.section!=='avia'||(S.user.role!=='forecaster'&&S.user.role!=='observer')){
+  if(!isAviaForecasterOrObserverByStaffData()){
     alert('This is for TIA Aviation Met Section Forecasters and Observers.');
     return;
   }
