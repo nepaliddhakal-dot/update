@@ -4799,12 +4799,17 @@ function initLeaveBalanceYearInput(){
     .map(s=>`<option value="${s.name}" data-role="${s.role}">${s.name} (${RLABEL[s.role]||s.role}, ${s.section==='avia'?'Aviation':'Weather'})</option>`).join('');
   const loStaff=document.getElementById('lo-staff'); if(loStaff&&!loStaff.dataset.filled){loStaff.innerHTML='<option value="">-- Select staff --</option>'+staffOptsHtml;loStaff.dataset.filled='1';}
   const lgStaff=document.getElementById('lg-staff'); if(lgStaff&&!lgStaff.dataset.filled){lgStaff.innerHTML='<option value="">-- All Staff --</option>'+staffOptsHtml;lgStaff.dataset.filled='1';}
-  // Weekly Forecaster is a Weather Forecasting Section (public forecaster) thing only
-  const wfOptsHtml=(S.staffFlat||[]).filter(s=>s.role==='forecaster'&&s.section==='weather').sort((a,b)=>a.name.localeCompare(b.name))
-    .map(s=>`<option value="${s.name}" data-role="${s.role}">${s.name}</option>`).join('');
+  // Weekly Forecaster is a Weather Forecasting Section (public forecaster) thing only.
+  // Read S.staff.weather.forecaster directly — S.staffFlat dedupes by name+role only
+  // (not section), so anyone who's ALSO an Aviation forecaster gets silently dropped
+  // from any Weather-filtered list built off S.staffFlat.
+  const wfOptsHtml=(S.staff?.weather?.forecaster||[]).slice().sort((a,b)=>a.localeCompare(b))
+    .map(name=>`<option value="${name}" data-role="forecaster">${name}</option>`).join('');
   const wfStaff=document.getElementById('wf-staff'); if(wfStaff&&!wfStaff.dataset.filled){wfStaff.innerHTML='<option value="">-- Select staff --</option>'+wfOptsHtml;wfStaff.dataset.filled='1';}
   // Extra Night Log is for TIA Aviation Met Section Forecasters + Observers only (24hr night rotation)
-  const enOptsHtml=(S.staffFlat||[]).filter(s=>s.section==='avia'&&(s.role==='forecaster'||s.role==='observer')).sort((a,b)=>a.name.localeCompare(b.name))
+  const enForecasters=(S.staff?.avia?.forecaster||[]).map(name=>({name,role:'forecaster'}));
+  const enObservers=(S.staff?.avia?.observer||[]).map(name=>({name,role:'observer'}));
+  const enOptsHtml=[...enForecasters,...enObservers].sort((a,b)=>a.name.localeCompare(b.name))
     .map(s=>`<option value="${s.name}" data-role="${s.role}">${s.name} (${RLABEL[s.role]})</option>`).join('');
   const enStaff=document.getElementById('en-staff'); if(enStaff&&!enStaff.dataset.filled){enStaff.innerHTML='<option value="">-- Select staff --</option>'+enOptsHtml;enStaff.dataset.filled='1';}
   const wfDate=document.getElementById('wf-weekstart'); if(wfDate&&!wfDate.value){wfDate.value=wfSnapToSaturday(todayISO());wfUpdateWeekEndPreview();}
