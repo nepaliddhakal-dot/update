@@ -858,6 +858,20 @@ textarea.fi{resize:vertical;min-height:80px}
 
       <hr style="border-color:var(--border);margin:16px 0"/>
 
+      <!-- Extra Weekly Forecaster Log — when the rotation's normal turn is covered by someone else -->
+      <div class="a-card-title">🔄 Extra Weekly Forecaster Log</div>
+      <div class="a-info">For Weather Forecasting Section Forecasters only. Log it when someone covers a week that wasn't originally theirs (e.g. the rotation's turn was Devid's, but Sunny covered it). Separate from the schedule above — this just tracks who's covered extra, so it's easy to see whose turn is next.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">
+        <select class="fi" id="ewf-staff" style="flex:1;min-width:160px;padding:6px 10px;font-size:12px"><option value="">-- Select staff --</option></select>
+        <input class="fi" type="date" id="ewf-weekstart" onchange="ewfUpdateWeekEndPreview()" style="width:150px;padding:6px 10px;font-size:12px"/>
+      </div>
+      <div id="ewf-weekend-preview" style="font-size:11px;color:var(--text3);margin-bottom:6px"></div>
+      <input class="fi" type="text" id="ewf-note" placeholder="Note (e.g. covered for Devid's turn)" style="padding:6px 10px;font-size:12px;width:100%;margin-bottom:8px"/>
+      <button class="btn-outline" onclick="saveExtraWeeklyForecasterLog()" style="padding:6px 12px;font-size:12px;margin-bottom:8px">💾 Log Extra Turn</button>
+      <div id="extra-weekly-forecaster-list"></div>
+
+      <hr style="border-color:var(--border);margin:16px 0"/>
+
       <!-- Extra Night Coverage Log — a simple history, not auto-assignment -->
       <div class="a-card-title">🌙 Extra Night Coverage Log</div>
       <div class="a-info">For TIA Aviation Met Section Forecasters and Observers only. Entries get added two ways: manually below, or automatically whenever you approve a Duty Change Request that results in AFN*/NMF*/AON*/NMO* (the 24hr combined night codes) — no extra step needed for those. Builds a history so it's easy to see whose turn is next — fewest/oldest logged entries first. Forecasters and Observers each only see their own role's history.</div>
@@ -2373,11 +2387,17 @@ function renderAdminFullRoster(){
   if(obsList.length)h1+=`<th class="sec-span-hdr obs-hdr" colspan="${obsList.length}" style="position:sticky;top:0">🔭 Observer (${obsList.length})</th>`;
   let h2='';
   for(const{name}of allStaff){h2+=`<th title="${name}" style="min-width:80px;max-width:120px;white-space:normal;word-break:break-word;position:sticky;top:0"><span style="font-size:13px;font-weight:800;color:var(--text)">${name}</span></th>`;}
+  if(!S.weeklyForecasterCache){ ensureWeeklyForecasterCacheLoaded(renderAdminFullRoster); }
+  const showWeeklyRowAfr=(afrSection==='weather'||afrSection==='all');
   let tbody='';
   for(let bsD=1;bsD<=bsDays;bsD++){
     const iso=bsToAd(bsY,bsM,bsD);
     const isT=iso===today;const dt=new Date(iso);
     const[,m,d]=iso.split('-').map(Number);
+    if(showWeeklyRowAfr&&dt.getDay()===6){
+      const match=(S.weeklyForecasterCache||[]).find(r=>r.weekStart===iso);
+      tbody+=`<tr><td colspan="${1+allStaff.length}" style="background:rgba(245,166,35,.15);border-top:2px solid #F5A623;border-bottom:2px solid #F5A623;padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:#F5A623">🗓️ Weekly Forecaster (Sat–Fri): ${match?match.staffName:'— not assigned —'}</td></tr>`;
+    }
     const dateCellHtml=`${toNpNum(bsD)}<br/><span style="font-size:8px;color:${isT?'var(--accent)':'var(--text3)'};font-weight:400">${DAYS_NP[dt.getDay()]} ${d}/${m}</span>`;
     let tr=`<td class="date-cell">${dateCellHtml}</td>`;
     for(const{name,role}of allStaff){
@@ -2568,12 +2588,19 @@ function renderFullRoster(){
     h2+=`<th title="${name}" style="min-width:80px;max-width:120px;white-space:normal;word-break:break-word;line-height:1.3;position:sticky;top:28px;background:var(--bg3);z-index:3;box-shadow:0 2px 4px rgba(0,0,0,.3)"><span style="font-size:13px;font-weight:800;color:var(--text)">${name}</span><br/><span style="font-size:8px;font-weight:400;color:var(--text3)">${RICON[role]} ${RLABEL[role]}</span></th>`;
   }
 
+  if(!S.weeklyForecasterCache){ ensureWeeklyForecasterCacheLoaded(renderFullRoster); }
+  const showWeeklyRow=(S.frSection==='weather'||S.frSection==='all');
+
   // Data rows
   let tbody='';
   for(let bsD=1;bsD<=bsDays;bsD++){
     const iso=bsToAd(bsY,bsM,bsD);
     const isT=iso===today;const dt=new Date(iso);
     const[,m,d]=iso.split('-').map(Number);
+    if(showWeeklyRow&&dt.getDay()===6){
+      const match=(S.weeklyForecasterCache||[]).find(r=>r.weekStart===iso);
+      tbody+=`<tr><td colspan="${1+allStaff.length}" style="background:rgba(245,166,35,.15);border-top:2px solid #F5A623;border-bottom:2px solid #F5A623;padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:#F5A623">🗓️ Weekly Forecaster (Sat–Fri): ${match?match.staffName:'— not assigned —'}</td></tr>`;
+    }
     const dateCellHtml=`${toNpNum(bsD)}<br/><span style="font-size:8px;color:${isT?'var(--accent)':'var(--text3)'};font-weight:400">${DAYS_NP[dt.getDay()]} ${d}/${m}</span>`;
     let tr=`<td class="date-cell">${dateCellHtml}</td>`;
     for(const{name,role}of allStaff){
@@ -4806,6 +4833,7 @@ function initLeaveBalanceYearInput(){
   const wfOptsHtml=(S.staff?.weather?.forecaster||[]).slice().sort((a,b)=>a.localeCompare(b))
     .map(name=>`<option value="${name}" data-role="forecaster">${name}</option>`).join('');
   const wfStaff=document.getElementById('wf-staff'); if(wfStaff&&!wfStaff.dataset.filled){wfStaff.innerHTML='<option value="">-- Select staff --</option>'+wfOptsHtml;wfStaff.dataset.filled='1';}
+  const ewfStaff=document.getElementById('ewf-staff'); if(ewfStaff&&!ewfStaff.dataset.filled){ewfStaff.innerHTML='<option value="">-- Select staff --</option>'+wfOptsHtml;ewfStaff.dataset.filled='1';}
   // Extra Night Log is for TIA Aviation Met Section Forecasters + Observers only (24hr night rotation)
   const enForecasters=(S.staff?.avia?.forecaster||[]).map(name=>({name,role:'forecaster'}));
   const enObservers=(S.staff?.avia?.observer||[]).map(name=>({name,role:'observer'}));
@@ -4813,8 +4841,10 @@ function initLeaveBalanceYearInput(){
     .map(s=>`<option value="${s.name}" data-role="${s.role}">${s.name} (${RLABEL[s.role]})</option>`).join('');
   const enStaff=document.getElementById('en-staff'); if(enStaff&&!enStaff.dataset.filled){enStaff.innerHTML='<option value="">-- Select staff --</option>'+enOptsHtml;enStaff.dataset.filled='1';}
   const wfDate=document.getElementById('wf-weekstart'); if(wfDate&&!wfDate.value){wfDate.value=wfSnapToSaturday(todayISO());wfUpdateWeekEndPreview();}
+  const ewfDate=document.getElementById('ewf-weekstart'); if(ewfDate&&!ewfDate.value){ewfDate.value=wfSnapToSaturday(todayISO());ewfUpdateWeekEndPreview();}
   const enDate=document.getElementById('en-date'); if(enDate&&!enDate.value)enDate.value=todayISO();
   loadWeeklyForecasterList();
+  loadExtraWeeklyForecasterList();
   loadExtraNightAdminList();
 }
 async function getLeaveConfigCached(force){
@@ -5005,6 +5035,18 @@ async function deleteLeaveAdjustment(id){
 // WEEKLY FORECASTER — one person assigned per whole week, separate
 // from the daily duty-code grid.
 // ══════════════════════════════════════════════════════════════════
+// Loads Weekly Forecaster assignments into S.weeklyForecasterCache (used by the
+// Today banner, history views, AND the Full Roster grids below), then re-runs
+// whatever render function asked for it once the data is ready.
+async function ensureWeeklyForecasterCacheLoaded(rerenderFn){
+  if(S.weeklyForecasterCache){ if(rerenderFn)rerenderFn(); return; }
+  try{
+    const res=await fetch(S.scriptUrl+'?action=getWeeklyForecasters');
+    const d=await res.json();
+    S.weeklyForecasterCache=d.data||[];
+  }catch(e){ S.weeklyForecasterCache=[]; }
+  if(rerenderFn)rerenderFn();
+}
 function wfWeekEndFromStart(startIso){
   const d=new Date(startIso+'T00:00:00Z');
   d.setUTCDate(d.getUTCDate()+6);
@@ -5103,16 +5145,34 @@ async function openWeeklyForecasterHistoryModal(){
   const bodyEl=document.getElementById('wfhistory-body');
   bodyEl.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">⏳ Loading...</div>';
   try{
-    const res=await fetch(S.scriptUrl+'?action=getWeeklyForecasters');
-    const d=await res.json();
-    const rows=d.data||[];
-    if(!rows.length){bodyEl.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">No weeks assigned yet.</div>';return;}
-    const summary=turnSummarize(rows,'staffName','weekStart');
-    bodyEl.innerHTML='<div style="display:flex;flex-direction:column;gap:6px">'+summary.map((s,i)=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px;font-size:12px${s.staffName===S.user.name?';border-color:var(--accent)':''}">
-        <span style="color:var(--text);font-weight:${s.staffName===S.user.name?'800':'600'}">${i===0?'👉 ':''}${s.staffName}${s.staffName===S.user.name?' (you)':''}</span>
-        <span style="color:var(--text3)">${s.count} week(s) — last started ${s.lastDate}</span>
-      </div>`).join('')+'</div>';
+    const [wfRes,ewfRes]=await Promise.all([
+      fetch(S.scriptUrl+'?action=getWeeklyForecasters'),
+      fetch(S.scriptUrl+'?action=getExtraWeeklyForecasterLog')
+    ]);
+    const wfD=await wfRes.json(), ewfD=await ewfRes.json();
+    const rows=wfD.data||[], extraRows=ewfD.data||[];
+    let html='';
+    if(rows.length){
+      const summary=turnSummarize(rows,'staffName','weekStart');
+      html+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">📅 Scheduled Turns</div>'+
+        '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">'+summary.map((s,i)=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px;font-size:12px${s.staffName===S.user.name?';border-color:var(--accent)':''}">
+          <span style="color:var(--text);font-weight:${s.staffName===S.user.name?'800':'600'}">${i===0?'👉 ':''}${s.staffName}${s.staffName===S.user.name?' (you)':''}</span>
+          <span style="color:var(--text3)">${s.count} week(s) — last started ${s.lastDate}</span>
+        </div>`).join('')+'</div>';
+    }else{
+      html+='<div style="color:var(--text3);font-size:12px;margin-bottom:16px">No weeks assigned yet.</div>';
+    }
+    if(extraRows.length){
+      const extraSummary=turnSummarize(extraRows,'staffName','weekStart');
+      html+='<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">🔄 Extra Turns Covered</div>'+
+        '<div style="display:flex;flex-direction:column;gap:6px">'+extraSummary.map((s,i)=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px;font-size:12px${s.staffName===S.user.name?';border-color:var(--accent)':''}">
+          <span style="color:var(--text);font-weight:${s.staffName===S.user.name?'800':'600'}">${i===0?'👉 ':''}${s.staffName}${s.staffName===S.user.name?' (you)':''}</span>
+          <span style="color:var(--text3)">${s.count} time(s) — last week of ${s.lastDate}</span>
+        </div>`).join('')+'</div>';
+    }
+    bodyEl.innerHTML=html;
   }catch(e){bodyEl.innerHTML='<div style="color:var(--red);font-size:12px;text-align:center;padding:20px">Could not load — check connection.</div>';}
 }
 async function deleteWeeklyForecaster(id){
@@ -5125,6 +5185,72 @@ async function deleteWeeklyForecaster(id){
     loadWeeklyForecasterList();
   }catch(e){alert('❌ Could not delete — check connection.');}
 }
+
+// ══════════════════════════════════════════════════════════════════
+// EXTRA WEEKLY FORECASTER LOG — same idea as Extra Night, but for weeks:
+// when the rotation's normal turn is covered by someone else, log it here
+// so it's easy to see who's covered extra (separate from the schedule above).
+// ══════════════════════════════════════════════════════════════════
+function ewfUpdateWeekEndPreview(){
+  const startEl=document.getElementById('ewf-weekstart'),prevEl=document.getElementById('ewf-weekend-preview');
+  if(!startEl||!startEl.value||!prevEl)return;
+  const snapped=wfSnapToSaturday(startEl.value);
+  if(snapped!==startEl.value)startEl.value=snapped;
+  prevEl.textContent='Week (Sat–Fri): '+snapped+' → '+wfWeekEndFromStart(snapped);
+}
+async function saveExtraWeeklyForecasterLog(){
+  const staffSel=document.getElementById('ewf-staff');
+  const staffName=staffSel.value, staffRole=staffName?(staffSel.selectedOptions[0]?.dataset.role||'forecaster'):'';
+  const weekStartRaw=document.getElementById('ewf-weekstart').value;
+  const note=document.getElementById('ewf-note').value.trim();
+  if(!staffName||!weekStartRaw){alert('❌ Please select a staff member and week');return;}
+  const weekStart=wfSnapToSaturday(weekStartRaw);
+  try{
+    const res=await fetch(S.scriptUrl,{method:'POST',body:JSON.stringify({
+      action:'saveExtraWeeklyForecasterLog',staffName,staffRole,weekStart,note,actorName:S.currentAdmin?.name||'Admin'
+    })});
+    const d=await res.json();
+    if(d.success===false){alert('❌ '+(d.error||'Save failed.'));return;}
+    document.getElementById('ewf-note').value='';
+    alert('✅ Logged an extra Weekly Forecaster turn for '+staffName+' (week of '+weekStart+').');
+    loadExtraWeeklyForecasterList();
+  }catch(e){alert('❌ Could not save — check connection.');}
+}
+async function loadExtraWeeklyForecasterList(){
+  const el=document.getElementById('extra-weekly-forecaster-list'); if(!el)return;
+  el.innerHTML='<div style="color:var(--text3);font-size:12px">⏳ Loading...</div>';
+  try{
+    const res=await fetch(S.scriptUrl+'?action=getExtraWeeklyForecasterLog');
+    const d=await res.json();
+    const rows=d.data||[];
+    if(!rows.length){el.innerHTML='<div style="color:var(--text3);font-size:12px">No extra turns logged yet.</div>';return;}
+    const summary=turnSummarize(rows,'staffName','weekStart');
+    const chronological=rows.slice().sort((a,b)=>b.weekStart.localeCompare(a.weekStart));
+    el.innerHTML=
+      '<div style="font-size:11px;font-weight:700;color:var(--text2);margin:4px 0 6px">Fewest/oldest first (likely next in line):</div>'+
+      '<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px">'+summary.map(s=>
+        `<div style="display:flex;justify-content:space-between;background:var(--card2);border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font-size:11px">
+          <span style="color:var(--text)">${s.staffName}</span>
+          <span style="color:var(--text3)">${s.count} time(s) — last week of ${s.lastDate}</span>
+        </div>`).join('')+'</div>'+
+      '<div style="font-size:11px;font-weight:700;color:var(--text2);margin:6px 0">Full log:</div>'+
+      '<div style="display:flex;flex-direction:column;gap:6px">'+chronological.map(r=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:8px 10px;font-size:11px">
+          <div>Week of ${r.weekStart} — <b style="color:var(--text)">${r.staffName}</b>${r.note?' <span style="color:var(--text3)">('+r.note+')</span>':''}</div>
+          <button onclick="deleteExtraWeeklyForecasterLog('${r.id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 4px" title="Delete">🗑️</button>
+        </div>`).join('')+'</div>';
+  }catch(e){el.innerHTML='<div style="color:var(--red);font-size:12px">Could not load — check connection.</div>';}
+}
+async function deleteExtraWeeklyForecasterLog(id){
+  if(!confirm('Delete this log entry?'))return;
+  try{
+    const res=await fetch(S.scriptUrl,{method:'POST',body:JSON.stringify({action:'deleteExtraWeeklyForecasterLog',id})});
+    const d=await res.json();
+    if(d.success===false){alert('❌ '+(d.error||'Delete failed.'));return;}
+    loadExtraWeeklyForecasterList();
+  }catch(e){alert('❌ Could not delete — check connection.');}
+}
+
 // Shows "Weekly Forecaster this week: X" on the Today tab, for the CURRENT Sat–Fri week
 async function updateWeeklyForecasterBanner(){
   const card=document.getElementById('weekly-forecaster-card'); if(!card)return;
