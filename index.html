@@ -846,7 +846,7 @@ textarea.fi{resize:vertical;min-height:80px}
 
       <!-- Weekly Forecaster — ONE person assigned per whole week, separate from daily duty codes -->
       <div class="a-card-title">🗓️ Weekly Forecaster Schedule</div>
-      <div class="a-info">Assign one person as Weekly Forecaster for a whole week (Saturday–Friday) — this is separate from their normal daily duty codes. Only Weather Forecasting Section Forecasters can be assigned. Shows on their Today tab for that week, and a reminder notification goes out Wednesday evening and Thursday morning.</div>
+      <div class="a-info">Assign one person as Weekly Forecaster for a whole week (Saturday–Friday) — this is separate from their normal daily duty codes. Only Weather Forecasting Section Forecasters can be assigned. Shows on their Today tab for that week. Reminder notifications go out 4 times: Wednesday evening, Thursday morning, Thursday evening, and Friday morning.</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">
         <select class="fi" id="wf-staff" style="flex:1;min-width:160px;padding:6px 10px;font-size:12px"><option value="">-- Select staff --</option></select>
         <input class="fi" type="date" id="wf-weekstart" onchange="wfUpdateWeekEndPreview()" style="width:150px;padding:6px 10px;font-size:12px"/>
@@ -2384,12 +2384,13 @@ function renderAdminFullRoster(){
   let h1=`<th class="date-col-hdr" rowspan="2" style="position:sticky;top:0;left:0;z-index:6">📅 Date</th>`;
   if(!S.weeklyForecasterCache){ ensureWeeklyForecasterCacheLoaded(renderAdminFullRoster); }
   const showWeeklyColAfr=(afrSection==='weather'||afrSection==='all');
-  if(showWeeklyColAfr) h1+=`<th rowspan="2" style="position:sticky;top:0;z-index:6;background:#F5A623;color:#000;min-width:32px;font-size:10px">🗓️<br/>WF</th>`;
   if(sdmList.length)h1+=`<th class="sec-span-hdr sdm-hdr" colspan="${sdmList.length}" style="position:sticky;top:0">⭐ Sr. Div. Met. (${sdmList.length})</th>`;
   if(foreList.length)h1+=`<th class="sec-span-hdr fore-hdr" colspan="${foreList.length}" style="position:sticky;top:0">🌤️ Forecaster (${foreList.length})</th>`;
+  if(showWeeklyColAfr) h1+=`<th rowspan="2" style="position:sticky;top:0;z-index:6;background:#F5A623;color:#000;min-width:64px;font-size:11px">🗓️<br/>Weekly<br/>Forecaster</th>`;
   if(obsList.length)h1+=`<th class="sec-span-hdr obs-hdr" colspan="${obsList.length}" style="position:sticky;top:0">🔭 Observer (${obsList.length})</th>`;
   let h2='';
   for(const{name}of allStaff){h2+=`<th title="${name}" style="min-width:80px;max-width:120px;white-space:normal;word-break:break-word;position:sticky;top:0"><span style="font-size:13px;font-weight:800;color:var(--text)">${name}</span></th>`;}
+  const wfInsertAtAfr=sdmList.length+foreList.length;
   let tbody='';
   let wfSkipAfr=0;
   for(let bsD=1;bsD<=bsDays;bsD++){
@@ -2398,18 +2399,18 @@ function renderAdminFullRoster(){
     const[,m,d]=iso.split('-').map(Number);
     const dateCellHtml=`${toNpNum(bsD)}<br/><span style="font-size:8px;color:${isT?'var(--accent)':'var(--text3)'};font-weight:400">${DAYS_NP[dt.getDay()]} ${d}/${m}</span>`;
     let tr=`<td class="date-cell">${dateCellHtml}</td>`;
-    if(showWeeklyColAfr){
-      if(wfSkipAfr>0){ wfSkipAfr--; }
-      else{
-        const weekStartIso=wfSnapToSaturday(iso);
-        const match=(S.weeklyForecasterCache||[]).find(r=>r.weekStart===weekStartIso);
-        let span=1,d2=bsD+1;
-        while(d2<=bsDays){ const iso2=bsToAd(bsY,bsM,d2); if(new Date(iso2).getDay()===6)break; span++; d2++; }
-        wfSkipAfr=span-1;
-        tr+=`<td rowspan="${span}" style="background:#F5A623;color:#000;font-weight:800;text-align:center;vertical-align:middle;writing-mode:vertical-rl;text-orientation:mixed;padding:4px 2px;font-size:11px">${match?match.staffName:'—'}</td>`;
-      }
-    }
-    for(const{name,role}of allStaff){
+    const wfCellHtmlAfr=(()=>{
+      if(!showWeeklyColAfr)return'';
+      if(wfSkipAfr>0){ wfSkipAfr--; return''; }
+      const weekStartIso=wfSnapToSaturday(iso);
+      const match=(S.weeklyForecasterCache||[]).find(r=>r.weekStart===weekStartIso);
+      let span=1,d2=bsD+1;
+      while(d2<=bsDays){ const iso2=bsToAd(bsY,bsM,d2); if(new Date(iso2).getDay()===6)break; span++; d2++; }
+      wfSkipAfr=span-1;
+      return`<td rowspan="${span}" style="background:#F5A623;color:#000;font-weight:800;text-align:center;vertical-align:middle;writing-mode:vertical-rl;text-orientation:mixed;padding:6px 4px;font-size:12px;min-width:64px">${match?match.staffName:'—'}</td>`;
+    })();
+    if(wfInsertAtAfr===0) tr+=wfCellHtmlAfr;
+    allStaff.forEach(({name,role},i)=>{
       let shift=getDuty(iso,name,role);
       if(shift===null){const f=getDutyAny(iso,name);if(f)shift=f.shift;}
       let cell;
@@ -2421,7 +2422,8 @@ function renderAdminFullRoster(){
         cell=`<span class="${cls}"${cs?` style="${cs}"`:''}>${shift}</span>`;
       }
       tr+=`<td>${cell}</td>`;
-    }
+      if(i+1===wfInsertAtAfr) tr+=wfCellHtmlAfr;
+    });
     tbody+=`<tr class="${isT?'today-row':''}">${tr}</tr>`;
   }
   const legendRows=[['MF','Morning Forecaster','6:00 AM – 12:00 PM'],['AF','Afternoon Forecaster','12:00 PM – 6:00 PM'],['AFN★','Day Night Forecaster','12:00 PM – next day 12:00 PM'],['NMF★','Night Morning Forecaster','Prev. day 12:00 PM – Today 12:00 PM'],['MA','Morning Aviation Forecaster','6:00 AM – 12:00 PM'],['DA','Day Aviation Forecaster','12:00 PM – 6:00 PM'],['NWP','Weather Modeling Section Forecaster','9:00 AM – 5:00 PM'],['SM','Sr. Met. Morning','6:00 AM – 12:00 PM'],['SA','Sr. Met. Afternoon','12:00 PM – 6:00 PM'],['SD','Sr. Met. Day','12:00 PM – 6:00 PM'],['SMA','Sr. Met. Aviation Morning','6:00 AM – 12:00 PM'],['SDA','Sr. Met. Aviation Day','12:00 PM – 6:00 PM'],['MO','Morning Observer','6:00 AM – 12:00 PM'],['AO','Afternoon Observer','12:00 PM – 6:00 PM'],['AON★','Day Night Observer','12:00 PM – next day 12:00 PM'],['NMO★','Night Morning Observer','Prev. day 12:00 PM – Today 12:00 PM'],['MO1','Morning Supporting Observer','6:00 AM – 12:00 PM'],['AO2','Afternoon Supporting Observer','12:00 PM – 6:00 PM'],['M1','Morning Supporter','6:00 AM – 12:00 PM'],['A1','Afternoon Supporter','12:00 PM – 6:00 PM'],['Off/xx','Duty Off','—']];
@@ -2589,9 +2591,9 @@ function renderFullRoster(){
   if(!S.weeklyForecasterCache){ ensureWeeklyForecasterCacheLoaded(renderFullRoster); }
   const showWeeklyCol=(S.frSection==='weather'||S.frSection==='all');
   let h1=`<th class="date-col-hdr" rowspan="2" style="position:sticky;top:0;z-index:6">📅 Date</th>`;
-  if(showWeeklyCol) h1+=`<th rowspan="2" style="position:sticky;top:0;z-index:6;background:#F5A623;color:#000;min-width:32px;font-size:10px">🗓️<br/>WF</th>`;
   if(sdmList.length) h1+=`<th class="sec-span-hdr sdm-hdr" colspan="${sdmList.length}" style="position:sticky;top:0">⭐ Sr. Div. Met. (${sdmList.length})</th>`;
   if(foreList.length) h1+=`<th class="sec-span-hdr fore-hdr" colspan="${foreList.length}" style="position:sticky;top:0">🌤️ Forecaster (${foreList.length})</th>`;
+  if(showWeeklyCol) h1+=`<th rowspan="2" style="position:sticky;top:0;z-index:6;background:#F5A623;color:#000;min-width:64px;font-size:11px">🗓️<br/>Weekly<br/>Forecaster</th>`;
   if(obsList.length) h1+=`<th class="sec-span-hdr obs-hdr" colspan="${obsList.length}" style="position:sticky;top:0">🔭 Observer (${obsList.length})</th>`;
 
   // Header row 2: individual name columns — bold, larger name; smaller role subtitle
@@ -2602,6 +2604,8 @@ function renderFullRoster(){
 
   // Data rows — Weekly Forecaster is a merged, vertical-text cell spanning
   // each Sat–Fri week's rows, matching the "AGRO"-style column in the sheet.
+  // It sits right after the Forecaster columns, before Observer.
+  const wfInsertAt=sdmList.length+foreList.length;
   let tbody='';
   let wfSkip=0;
   for(let bsD=1;bsD<=bsDays;bsD++){
@@ -2610,18 +2614,18 @@ function renderFullRoster(){
     const[,m,d]=iso.split('-').map(Number);
     const dateCellHtml=`${toNpNum(bsD)}<br/><span style="font-size:8px;color:${isT?'var(--accent)':'var(--text3)'};font-weight:400">${DAYS_NP[dt.getDay()]} ${d}/${m}</span>`;
     let tr=`<td class="date-cell">${dateCellHtml}</td>`;
-    if(showWeeklyCol){
-      if(wfSkip>0){ wfSkip--; }
-      else{
-        const weekStartIso=wfSnapToSaturday(iso);
-        const match=(S.weeklyForecasterCache||[]).find(r=>r.weekStart===weekStartIso);
-        let span=1,d2=bsD+1;
-        while(d2<=bsDays){ const iso2=bsToAd(bsY,bsM,d2); if(new Date(iso2).getDay()===6)break; span++; d2++; }
-        wfSkip=span-1;
-        tr+=`<td rowspan="${span}" style="background:#F5A623;color:#000;font-weight:800;text-align:center;vertical-align:middle;writing-mode:vertical-rl;text-orientation:mixed;padding:4px 2px;font-size:11px">${match?match.staffName:'—'}</td>`;
-      }
-    }
-    for(const{name,role}of allStaff){
+    const wfCellHtml=(()=>{
+      if(!showWeeklyCol)return'';
+      if(wfSkip>0){ wfSkip--; return''; }
+      const weekStartIso=wfSnapToSaturday(iso);
+      const match=(S.weeklyForecasterCache||[]).find(r=>r.weekStart===weekStartIso);
+      let span=1,d2=bsD+1;
+      while(d2<=bsDays){ const iso2=bsToAd(bsY,bsM,d2); if(new Date(iso2).getDay()===6)break; span++; d2++; }
+      wfSkip=span-1;
+      return`<td rowspan="${span}" style="background:#F5A623;color:#000;font-weight:800;text-align:center;vertical-align:middle;writing-mode:vertical-rl;text-orientation:mixed;padding:6px 4px;font-size:12px;min-width:64px">${match?match.staffName:'—'}</td>`;
+    })();
+    if(wfInsertAt===0) tr+=wfCellHtml;
+    allStaff.forEach(({name,role},i)=>{
       // Try role-specific first, then any role (for shared staff)
       let shift=getDuty(iso,name,role);
       if(shift===null){const f=getDutyAny(iso,name);if(f)shift=f.shift;}
@@ -2634,7 +2638,8 @@ function renderFullRoster(){
         cell=`<span class="${cls}"${cs?` style="${cs}"`:''}>${shift}</span>`;
       }
       tr+=`<td>${cell}</td>`;
-    }
+      if(i+1===wfInsertAt) tr+=wfCellHtml;
+    });
     tbody+=`<tr class="${isT?'today-row':''}">${tr}</tr>`;
   }
 
