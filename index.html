@@ -423,6 +423,7 @@ textarea.fi{resize:vertical;min-height:80px}
       <div class="uname" id="hdr-name">--</div>
     </div>
     <div class="ah-right">
+      <button class="icon-btn" id="hdr-admin-btn" onclick="openAdminAsStaff()" title="Admin Panel" style="display:none">🛠️</button>
       <button class="icon-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Theme">🌙</button>
       <button class="icon-btn" id="notif-icon-btn" onclick="toggleNotifFromIcon()" title="Notifications">🔔</button>
       <button class="icon-btn" id="hdr-profile-btn" onclick="openProfileModal()" title="Profile"><span id="hdr-profile-btn-inner">👤</span></button>
@@ -804,7 +805,7 @@ textarea.fi{resize:vertical;min-height:80px}
         <button class="btn-outline" onclick="openLeaveEntitlementsEditor()" style="padding:6px 12px;font-size:12px">⚙️ Edit Entitlements</button>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Already-saved months won't reflect a leave-counting fix automatically — use this once to fix past months:</div>
-      <button class="btn-outline" onclick="recalcAllSummaries()" style="padding:6px 12px;font-size:12px;margin-bottom:8px">🔁 Recalculate Leave Totals (all past months)</button>
+      <button class="btn-outline" onclick="recalcAllSummaries()" style="padding:6px 12px;font-size:12px;margin-bottom:8px">🔁 Recalculate Leave Totals & Fix Stray Dates (all past months)</button>
       <div id="recalc-summary-status" style="font-size:11px;color:var(--text3);min-height:14px;margin-bottom:8px"></div>
       <div id="leave-balance-result"></div>
       <div id="leave-entitlements-editor" style="display:none;margin-top:10px;background:var(--card2);border:1px solid var(--border2);border-radius:var(--radius);padding:12px"></div>
@@ -1009,6 +1010,15 @@ textarea.fi{resize:vertical;min-height:80px}
         <div class="fg"><label class="fl">Permission</label>
           <select class="fi" id="sa-perm"><option value="all">All rosters</option><option value="observer">Observer only</option><option value="forecaster">Forecaster only</option><option value="sdm">Sr. Div. Met. only</option></select></div>
         <button class="btn-green" onclick="addSubAdmin()" style="width:auto;align-self:flex-start">Add Sub-Admin</button>
+      </div>
+      <div class="a-card" id="staff-admin-card" style="display:none">
+        <div class="a-card-title">🛠️ Staff Admin Panel Access</div>
+        <div class="a-info">Grant a staff account access to the Admin Panel through their own name + password login — no separate admin username/PIN needed. They'll see a 🛠️ button in their app header. They act like a sub-admin (sensitive changes still need Master approval). Master Admin only.</div>
+        <div class="fg"><label class="fl">Staff Member</label>
+          <select class="fi" id="stadmin-name"><option value="">-- Select staff --</option></select>
+        </div>
+        <button class="btn-green" onclick="grantStaffAdmin()" style="width:auto;align-self:flex-start">Grant Admin Access</button>
+        <div id="staff-admin-list" style="margin-top:10px"><div style="color:var(--text3);font-size:13px">No staff admins yet.</div></div>
       </div>
       <button class="btn-red" onclick="clearAllData()" style="width:100%">🗑️ Clear All Local Data</button>
     </div>
@@ -1527,7 +1537,7 @@ function initInactivityTimer(){
     }
   },60*1000); // check every minute
 }
-const DEFAULT_URL='https://script.google.com/macros/s/AKfycbyQ2-W2W0fP5p1ekjppm2uaN-2Yh2jIPu8YlJwZ1FfkP68CViL9Zdqh-rIOPkn7KCCd/exec';
+const DEFAULT_URL='https://script.google.com/macros/s/AKfycbwhBzeRAyaqB134Mfn8lBC_075jftKbyu7tT858Kf4IXN8MEX1V412uCKsy96GyrPj1/exec';
 function loadLocal(){
   try{
     const r=localStorage.getItem('mfd_rosters');if(r)S.rosters=JSON.parse(r);
@@ -1867,18 +1877,21 @@ async function submitStaffPassword(){
   if(!pw||pw.length<4){err.textContent='❌ Password कम्तिमा ४ अक्षरको हुनुपर्छ';return;}
   err.textContent='⏳ Please wait...';
   try{
+    let staffAdmin=false;
     if(_pendingLoginHasPassword){
       const res=await fetch(S.scriptUrl,{method:'POST',body:JSON.stringify({action:'verifyStaffLogin',name,role:RLABEL[selectedRole],password:pw})});
       const d=await res.json();
       if(!d.success){err.textContent='❌ '+(d.error||'गलत password');return;}
+      staffAdmin=!!d.staffAdmin;
     }else{
       const confirm2=document.getElementById('staff-pw-confirm').value;
       if(pw!==confirm2){err.textContent='❌ Password मिलेन, फेरि जाँच्नुहोस्';return;}
       const res=await fetch(S.scriptUrl,{method:'POST',body:JSON.stringify({action:'setStaffPassword',name,role:RLABEL[selectedRole],password:pw})});
       const d=await res.json();
       if(!d.success){err.textContent='❌ '+(d.error||'Password set गर्न सकिएन');return;}
+      staffAdmin=!!d.staffAdmin;
     }
-    S.user={name,role:selectedRole,section:selectedSection};
+    S.user={name,role:selectedRole,section:selectedSection,staffAdmin};
     localStorage.setItem('mfd_user',JSON.stringify(S.user));
     enterApp();
   }catch(e){err.textContent='❌ Failed. Check connection.';}
@@ -1912,6 +1925,7 @@ function enterApp(){
   refreshProfileAvatarUI(); // show any cached photo immediately
   loadProfilePhoto();       // then refresh from server in the background
   document.getElementById('hdr-name').textContent=S.user.name;
+  const adminBtn=document.getElementById('hdr-admin-btn');if(adminBtn)adminBtn.style.display=S.user.staffAdmin?'':'none';
   const notifIcon=document.getElementById('notif-icon-btn');if(notifIcon)notifIcon.style.display='';
   document.querySelectorAll('.tab-bar .tab').forEach(t=>t.style.display='');
   const fab=document.getElementById('swap-fab');if(fab)fab.style.display='';
@@ -3264,9 +3278,40 @@ function renderMyYear(mine,entitlements,mode){
       </div>
     </div>`;
   }).join('');
+  // ── Month-wise सारांश (only shown in Year view — the whole point of the
+  // "yearly" tab is to see the full-year total AND a per-month breakdown
+  // together, instead of having to flip to the Monthly tab one month at a time) ──
+  let monthlyHtml='';
+  if(mode==='year'&&Array.isArray(mine.perMonth)&&mine.perMonth.length){
+    const rows=mine.perMonth.slice().sort((a,b)=>bsFileSortKey(a.month)-bsFileSortKey(b.month));
+    monthlyHtml=`<div style="font-size:12px;font-weight:700;color:var(--text2);margin:18px 0 8px">🗓️ महिना अनुसार सारांश (Month-wise)</div>
+    <div style="border:1px solid var(--border2);border-radius:var(--radius);overflow:hidden">
+      <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;background:var(--bg3);padding:8px 12px;font-size:11px;font-weight:700;color:var(--text3)">
+        <div>Month</div><div style="text-align:center">Duty</div><div style="text-align:center">Leave</div>
+      </div>
+      ${rows.map(r=>`<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:8px 12px;font-size:12px;border-top:1px solid var(--border)">
+        <div style="font-weight:600">${bsFileLabel(r.month)}</div>
+        <div style="text-align:center;color:var(--accent);font-weight:700">${r.dutyDays}</div>
+        <div style="text-align:center;color:var(--yellow);font-weight:700">${r.leaveDays}</div>
+      </div>`).join('')}
+    </div>`;
+  }
   bodyEl.innerHTML=statsHtml+
     '<div style="font-size:12px;font-weight:700;color:var(--text2);margin:6px 0 8px">📆 Leave Balance</div>'+
-    leaveCardsHtml;
+    leaveCardsHtml+monthlyHtml;
+}
+// "SHRAWAN_2083" -> "Shrawan 2083" ; also a chronological sort key (BS year*12+month index)
+function bsFileLabel(fileOrSheetName){
+  const parts=String(fileOrSheetName||'').replace(/\.(XLSX|XLS|CSV)$/i,'').split('_');
+  const idx=BS_MONTH_NAMES_EN.findIndex(n=>n.toUpperCase()===String(parts[0]).toUpperCase());
+  const monthLabel=idx>-1?BS_MONTH_NAMES_EN[idx]:(parts[0]||'--');
+  return monthLabel+' '+(parts[1]||'');
+}
+function bsFileSortKey(fileOrSheetName){
+  const parts=String(fileOrSheetName||'').replace(/\.(XLSX|XLS|CSV)$/i,'').split('_');
+  const idx=BS_MONTH_NAMES_EN.findIndex(n=>n.toUpperCase()===String(parts[0]).toUpperCase());
+  const yr=parseInt(parts[1])||0;
+  return yr*12+(idx>-1?idx:0);
 }
 function fillSwapForDate(iso){
   const shift=getDuty(iso,S.user.name,S.user.role);
@@ -3508,6 +3553,17 @@ async function doAdminLogin(){
   }else{
     err.textContent='❌ Incorrect username or PIN';
   }
+}
+// ── Staff member with granted Admin Panel access jumps straight in using
+// their existing staff login — no separate admin username/PIN needed.
+// They're treated exactly like a sub-admin (not master): sensitive changes
+// they make still go through the existing two-tier Master approval queue. ──
+function openAdminAsStaff(){
+  if(!S.user||!S.user.staffAdmin)return;
+  S.currentAdmin={name:S.user.name+' (Staff Admin)',isMaster:false,username:S.user.name,isStaffAdmin:true};
+  document.getElementById('admin-hdr-name').textContent=S.currentAdmin.name;
+  switchScreen('admin');renderAdminStaff();renderMonthsList();renderAdminsTab();
+  document.getElementById('script-url').value=S.scriptUrl||'';
 }
 function closeAdmin(){switchScreen(S.user?'app':'login');}
 function forgotPin(){
@@ -3792,8 +3848,8 @@ async function saveEditedRoster(){
 function renderAdminsTab(){
   document.getElementById('ma-user').value=S.adminCreds.username||'';
   const el=document.getElementById('sub-admin-list');
-  if(!S.subAdmins.length){el.innerHTML='<div style="color:var(--text3);font-size:13px">No sub-admins yet.</div>';return;}
-  el.innerHTML=S.subAdmins.map((sa,i)=>`<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid rgba(30,48,72,.5)">
+  if(!S.subAdmins.length){el.innerHTML='<div style="color:var(--text3);font-size:13px">No sub-admins yet.</div>';}
+  else el.innerHTML=S.subAdmins.map((sa,i)=>`<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid rgba(30,48,72,.5)">
     <div style="flex:1">
       <div style="font-size:13px;font-weight:500">${sa.username}</div>
       <div style="font-size:11px;color:var(--text3)">${sa.permission||'All rosters'}</div>
@@ -3804,6 +3860,59 @@ function renderAdminsTab(){
       <button class="btn-red" onclick="removeSubAdmin(${i})">Remove</button>
     </div>
   </div>`).join('');
+  // Staff Admin Panel access — Master only (a staff-admin can't grant others this)
+  const staCard=document.getElementById('staff-admin-card');
+  if(staCard){
+    const isMaster=!S.currentAdmin||S.currentAdmin.isMaster; // treat direct/legacy admin-login as master
+    staCard.style.display=isMaster?'':'none';
+    if(isMaster)loadStaffAdminUI();
+  }
+}
+async function loadStaffAdminUI(){
+  const sel=document.getElementById('stadmin-name');
+  if(sel&&!sel.dataset.filled&&(S.staffFlat||[]).length){
+    sel.innerHTML='<option value="">-- Select staff --</option>'+(S.staffFlat||[]).slice()
+      .sort((a,b)=>a.name.localeCompare(b.name))
+      .map(s=>`<option value="${s.name}|${RLABEL[s.role]}">${s.name} (${RLABEL[s.role]}, ${SEC_LABEL[s.section]})</option>`).join('');
+    sel.dataset.filled='1';
+  }
+  const listEl=document.getElementById('staff-admin-list');
+  if(!S.scriptUrl||!listEl)return;
+  try{
+    const res=await fetch(S.scriptUrl+'?action=getStaffAdmins');
+    const d=await res.json();
+    const rows=d.data||[];
+    if(!rows.length){listEl.innerHTML='<div style="color:var(--text3);font-size:13px">No staff admins yet.</div>';return;}
+    listEl.innerHTML=rows.map(r=>`<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid rgba(30,48,72,.5)">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500">${r.name}</div>
+        <div style="font-size:11px;color:var(--text3)">${RLABEL[r.role]||r.role} · granted by ${r.grantedBy||'--'}</div>
+      </div>
+      <button class="btn-red" onclick="revokeStaffAdmin('${r.name.replace(/'/g,"\\'")}','${r.role}')">Revoke</button>
+    </div>`).join('');
+  }catch(e){listEl.innerHTML='<div style="color:var(--red);font-size:12px">Could not load — check connection.</div>';}
+}
+async function grantStaffAdmin(){
+  const sel=document.getElementById('stadmin-name');
+  const val=sel.value; if(!val){alert('Select a staff member first');return;}
+  const[name,role]=val.split('|');
+  if(!S.scriptUrl){alert('Script URL not configured.');return;}
+  try{
+    const res=await fetch(S.scriptUrl,{method:'POST',body:JSON.stringify({action:'setStaffAdmin',name,role,grant:true,actorRole:'master',actorName:S.currentAdmin?.name||'Admin'})});
+    const d=await res.json();
+    if(!d.success){alert('❌ '+(d.error||'Could not grant access'));return;}
+    alert('✅ '+name+' can now access the Admin Panel from their own staff login.');
+    sel.value='';loadStaffAdminUI();
+  }catch(e){alert('❌ Network error');}
+}
+async function revokeStaffAdmin(name,role){
+  if(!confirm('Revoke Admin Panel access for '+name+'?'))return;
+  try{
+    const res=await fetch(S.scriptUrl,{method:'POST',body:JSON.stringify({action:'setStaffAdmin',name,role,grant:false,actorRole:'master',actorName:S.currentAdmin?.name||'Admin'})});
+    const d=await res.json();
+    if(!d.success){alert('❌ '+(d.error||'Could not revoke access'));return;}
+    loadStaffAdminUI();
+  }catch(e){alert('❌ Network error');}
 }
 function validatePassword(p){
   if(p.length<6)return'Minimum 6 characters';if(!/[A-Z]/.test(p))return'At least 1 uppercase letter';
@@ -3875,7 +3984,14 @@ async function toggleNotifFromIcon(){
     try{
       firebase.initializeApp({apiKey:"AIzaSyCAjEiQQkBeVEzzzTorNVgWg3RIgi7Tz54",authDomain:"mfd-roster.firebaseapp.com",projectId:"mfd-roster",messagingSenderId:"757155484481",appId:"1:757155484481:web:42046945a74ce853de07c0"});
       const msg=firebase.messaging();
-      const token=await msg.getToken({vapidKey:'BFsAYUzrl_Jrq8QIt0aW_4Mf6C86KYIHIYo5B-4Pz3eD2Lt15aL3R_zmw1TLjMEJzYOE-cyXFvJrYR1eSYBzsIU'});
+      // Pin Firebase to OUR already-registered sw.js instead of letting it silently
+      // register its own separate firebase-messaging-sw.js. Two service workers both
+      // reacting to the same push is the other half of the double-notification bug
+      // (the first half — sending both "notification" and a data payload — is fixed
+      // server-side in sendOneFCM). sw.js must handle the push itself (reading
+      // event.data.json().data, not .notification) for this to keep working.
+      const swReg=S.swRegistration||await navigator.serviceWorker.ready.catch(()=>null);
+      const token=await msg.getToken({vapidKey:'BFsAYUzrl_Jrq8QIt0aW_4Mf6C86KYIHIYo5B-4Pz3eD2Lt15aL3R_zmw1TLjMEJzYOE-cyXFvJrYR1eSYBzsIU',...(swReg?{serviceWorkerRegistration:swReg}:{})});
       S.fcmToken=token;localStorage.setItem('mfd_fcm',token);await regToken(token);updateNotifIcon();alert('✅ Notifications enabled!');
     }catch(err){alert('❌ FCM Error: '+err.message);}
   }
@@ -4880,7 +4996,7 @@ async function getLeaveConfigCached(force){
 }
 async function recalcAllSummaries(){
   const statusEl=document.getElementById('recalc-summary-status');
-  if(!confirm('This re-scans every monthly roster file and rebuilds its Leave/Duty totals with the corrected logic. It can take a little while for many months. Continue?'))return;
+  if(!confirm('This re-scans every monthly roster file, removes any date rows that don\'t actually belong to that month (the cause of inflated "Total Days"), and rebuilds Leave/Duty totals. It can take a little while for many months. Continue?'))return;
   statusEl.style.color='var(--text3)';
   statusEl.textContent='⏳ Fetching file list...';
   try{
@@ -5405,6 +5521,7 @@ async function loadAppInstalls(){
 function registerSW(){
   if('serviceWorker'in navigator){
     navigator.serviceWorker.register('sw.js').then(reg=>{
+      S.swRegistration=reg; // reused by getToken() below so Firebase doesn't register its own SECOND service worker
       reg.addEventListener('updatefound',()=>{const nw=reg.installing;nw.addEventListener('statechange',()=>{if(nw.state==='installed'&&navigator.serviceWorker.controller)document.getElementById('update-banner').style.display='flex';});});
     }).catch(()=>{});
     // ── Auto-reload once when a new Service Worker takes control ──
