@@ -717,8 +717,8 @@ textarea.fi{resize:vertical;min-height:80px}
         <div style="font-size:11px;color:var(--text2);margin-top:4px">Tap "Assign" to place each person into their section.</div>
       </div>
       <div class="a-card" id="station-assign-card">
-        <div class="a-card-title">📡 Station Analysis Assignments</div>
-        <div class="a-info">Fixed, per-person reminder — e.g. an observer who always analyzes Station D & Station F sees that on their own dashboard. Comma-separate multiple stations. Leave blank to remove.</div>
+        <div class="a-card-title">📡 Station Analysis Assignments (TIA Aviation Met Observers)</div>
+        <div class="a-info">Fixed, per-person reminder for TIA Aviation Met Section observers only — e.g. A1 always analyzes Dharan, Dhankuta & Itahari. Type station names separated by commas — add as many as needed. Leave blank to remove.</div>
         <div id="station-assign-list"></div>
         <button class="btn-green" onclick="saveStationAssignments()" style="margin-top:8px">💾 Save Station Assignments</button>
       </div>
@@ -1636,7 +1636,12 @@ async function syncData(silent=false){
   if(!S.scriptUrl){hideLoading();return;}
   showToast('Syncing roster data...',10);
   try{
-    const res=await fetchWithRetry(S.scriptUrl+'?action=getRosters',{},2,8000);
+    // Timeout raised from 8s → 15s: readRosterFromDriveFolder() on the backend
+    // scans every monthly file in Drive on a cache miss, and that scan gets
+    // slower as more months accumulate over the roster's history — a genuine,
+    // slow-but-successful response was being abandoned early and misreported
+    // as "server unreachable". This buys it more time before giving up.
+    const res=await fetchWithRetry(S.scriptUrl+'?action=getRosters',{},2,15000);
     const data=await res.json();
     showToast('Updating local data...',75);
     if(data.rosters){S.rosters=data.rosters;localStorage.setItem('mfd_rosters',JSON.stringify(S.rosters));localStorage.setItem('mfd_rosters_ts',new Date().toISOString());}
@@ -2069,7 +2074,7 @@ function mdNext(){S.mdBsMonth++;if(S.mdBsMonth>11){S.mdBsMonth=0;S.mdBsYear++;}r
 // (e.g. always analyzes Station D & Station F). Silent no-op for everyone else.
 async function loadStationReminder(){
   const card=document.getElementById('station-reminder-card');
-  if(!card||!S.user||S.user.role!=='observer'||!S.scriptUrl)return;
+  if(!card||!S.user||S.user.role!=='observer'||S.user.section!=='avia'||!S.scriptUrl)return;
   try{
     const res=await fetch(S.scriptUrl+'?action=getStationAssignments');
     const d=await res.json();
@@ -3781,15 +3786,16 @@ async function renderStationAssignments(){
     }catch(e){S.stationAssignments={};}
   }
   S.stationAssignments=S.stationAssignments||{};
-  const observers=[];
-  for(const sec of['avia','weather'])for(const n of((S.staff[sec]&&S.staff[sec].observer)||[]))observers.push({name:n,section:sec});
-  if(!observers.length){el.innerHTML='<div style="color:var(--text3);font-size:13px">No observers added yet.</div>';return;}
+  // TIA Aviation Met Section observers only — this is specifically for aviation
+  // station-data analysis, so Weather Forecasting Section observers don't apply.
+  const observers=((S.staff.avia&&S.staff.avia.observer)||[]).map(n=>({name:n,section:'avia'}));
+  if(!observers.length){el.innerHTML='<div style="color:var(--text3);font-size:13px">No TIA Aviation Met observers added yet.</div>';return;}
   el.innerHTML=observers.map(o=>{
     const key=o.section+'|observer|'+o.name;
     const val=(S.stationAssignments[key]||[]).join(', ');
     return `<div class="fg" style="margin-bottom:8px">
-      <label class="fl">${o.name} <span style="color:var(--text3);font-weight:400">(${SEC_LABEL[o.section]})</span></label>
-      <input class="fi" data-station-key="${key.replace(/"/g,'&quot;')}" value="${val.replace(/"/g,'&quot;')}" placeholder="e.g. Station D, Station F"/>
+      <label class="fl">${o.name}</label>
+      <input class="fi" data-station-key="${key.replace(/"/g,'&quot;')}" value="${val.replace(/"/g,'&quot;')}" placeholder="e.g. Dharan, Dhankuta, Itahari"/>
     </div>`;
   }).join('');
 }
