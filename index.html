@@ -497,6 +497,9 @@ textarea.fi{resize:vertical;min-height:80px}
     </div>
     <!-- MY DUTIES — clean rows, no colleague list; click row to see details -->
     <div class="tab-panel" id="tab-myduties">
+      <div id="station-reminder-card" style="display:none;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;font-size:13px">
+        📡 <strong>Your Stations:</strong> <span id="station-reminder-text"></span>
+      </div>
       <div class="month-nav">
         <div style="display:flex;flex-direction:column;align-items:flex-start;min-width:80px">
           <button class="nav-arrow" onclick="mdPrev()" style="padding:0">‹</button>
@@ -708,6 +711,12 @@ textarea.fi{resize:vertical;min-height:80px}
         <div class="a-card-title">⚠️ Unassigned Staff</div>
         <div id="unassigned-list"></div>
         <div style="font-size:11px;color:var(--text2);margin-top:4px">Tap "Assign" to place each person into their section.</div>
+      </div>
+      <div class="a-card" id="station-assign-card">
+        <div class="a-card-title">📡 Station Analysis Assignments</div>
+        <div class="a-info">Fixed, per-person reminder — e.g. an observer who always analyzes Station D & Station F sees that on their own dashboard. Comma-separate multiple stations. Leave blank to remove.</div>
+        <div id="station-assign-list"></div>
+        <button class="btn-green" onclick="saveStationAssignments()" style="margin-top:8px">💾 Save Station Assignments</button>
       </div>
     </div>
     <div class="admin-panel" id="ap-months">
@@ -1232,7 +1241,8 @@ const SHIFT_COLORS={
   'SD':'#5A3080','SM':'#70D018','SMA':'#D0E8B8','SA':'#C0D8E0','SDA':'#C0A8E8',
   // Forecaster
   'MF':'#30E008','AF':'#5A3080','M1':'#30E008','A1':'#60E810','MA':'#B0D888','DA':'#A090E0',
-  'AFN*':'#B00000','NMF*':'#B00000','NWP':'#F5A623',
+  'AFN*':'#B00000','NMF*':'#B00000',
+  'MA1':'#D8C888','DA1':'#C8B0F0','MF1':'#88E068','AF1':'#90F048',
   // Observer
   'MO':'#B8E0F0','AO':'#4A90D9','MO1':'#30E008','AO2':'#4FD1C5','AON*':'#B00000','NMO*':'#B00000'
 };
@@ -1268,7 +1278,8 @@ const DUTY_NAMES={
   'MF':'Morning Forecaster','AF':'Afternoon Forecaster',
   'M1':'Morning Supporter','A1':'Afternoon Supporter',
   'MA':'Morning Aviation Forecaster','DA':'Day Aviation Forecaster',
-  'NWP':'Weather Modeling Section Forecaster',
+  'MA1':'Morning Aviation (OJT) Forecaster','DA1':'Day Aviation (OJT) Forecaster',
+  'MF1':'Morning Supporting (OJT) Forecaster','AF1':'Day Supporting (OJT) Forecaster',
   'SM':'Sr. Met. Morning','SA':'Sr. Met. Afternoon','SD':'Sr. Met. Day',
   'SMA':'Sr. Met. Aviation (Morning)','SDA':'Sr. Met. Aviation (Day)',
   'AON*':'Day Night Observer★','NMO*':'Night Morning Observer★',
@@ -1280,7 +1291,8 @@ const DUTY_TIMES={
   'MF':'6:00 AM – 12:00 PM','AF':'12:00 PM – 6:00 PM','M1':'6:00 AM – 12:00 PM','A1':'12:00 PM – 6:00 PM',
   'MA':'6:00 AM – 12:00 PM','DA':'12:00 PM – 6:00 PM','SM':'6:00 AM – 12:00 PM','SA':'12:00 PM – 6:00 PM','SD':'12:00 PM – 6:00 PM',
   'SMA':'6:00 AM – 12:00 PM','SDA':'12:00 PM – 6:00 PM','MO':'6:00 AM – 12:00 PM','AO':'12:00 PM – 6:00 PM',
-  'MO1':'6:00 AM – 12:00 PM','AO2':'12:00 PM – 6:00 PM','NWP':'9:00 AM – 5:00 PM',
+  'MO1':'6:00 AM – 12:00 PM','AO2':'12:00 PM – 6:00 PM',
+  'MA1':'6:00 AM – 12:00 PM','DA1':'12:00 PM – 6:00 PM','MF1':'6:00 AM – 12:00 PM','AF1':'12:00 PM – 6:00 PM',
   'AFN*':'12:00 PM – next day 12:00 PM (24 hrs)','NMF*':'Prev. day 12:00 PM – Today 12:00 PM (24 hrs)',
   'AON*':'12:00 PM – next day 12:00 PM (24 hrs)','NMO*':'Prev. day 12:00 PM – Today 12:00 PM (24 hrs)',
   'XX':'','xx':'',''  :''
@@ -1924,6 +1936,7 @@ function enterApp(){
   flushPendingHandoverNotes();
   refreshProfileAvatarUI(); // show any cached photo immediately
   loadProfilePhoto();       // then refresh from server in the background
+  loadStationReminder();    // observer's own station-analysis assignment, if any
   document.getElementById('hdr-name').textContent=S.user.name;
   const adminBtn=document.getElementById('hdr-admin-btn');if(adminBtn)adminBtn.style.display=S.user.staffAdmin?'':'none';
   const notifIcon=document.getElementById('notif-icon-btn');if(notifIcon)notifIcon.style.display='';
@@ -2047,6 +2060,23 @@ function renderToday(){
 // ── MY DUTIES — clean rows only, tap to see details ──
 function mdPrev(){S.mdBsMonth--;if(S.mdBsMonth<0){S.mdBsMonth=11;S.mdBsYear--;}renderMyDuties();}
 function mdNext(){S.mdBsMonth++;if(S.mdBsMonth>11){S.mdBsMonth=0;S.mdBsYear++;}renderMyDuties();}
+// ── Shows a fixed "Your Stations" reminder card on My Duties for observers
+// who've been given a personal station-analysis assignment by the admin
+// (e.g. always analyzes Station D & Station F). Silent no-op for everyone else.
+async function loadStationReminder(){
+  const card=document.getElementById('station-reminder-card');
+  if(!card||!S.user||S.user.role!=='observer'||!S.scriptUrl)return;
+  try{
+    const res=await fetch(S.scriptUrl+'?action=getStationAssignments');
+    const d=await res.json();
+    const key=(S.user.section||'avia')+'|observer|'+S.user.name;
+    const stations=(d.data||{})[key];
+    if(stations&&stations.length){
+      document.getElementById('station-reminder-text').textContent=stations.join(', ');
+      card.style.display='';
+    }else card.style.display='none';
+  }catch(e){card.style.display='none';}
+}
 function renderMyDuties(){
   if(!S.user)return;
   const{name,role}=S.user;
@@ -2341,7 +2371,7 @@ ${officialLetterheadHtml(secTitle)}
 <div class="meta"><b>Month:</b> ${np} (${en}) &nbsp;|&nbsp; <b>Total Staff:</b> ${allStaff.length} &nbsp;|&nbsp; <b>Generated:</b> ${new Date().toLocaleString()}</div>
 <table><thead><tr>${h1}</tr><tr>${h2}</tr></thead><tbody>${tbody}</tbody></table>
 <div class="legend">
-${[['MF','Morning Forecaster (6AM–12PM)'],['AF','Afternoon Forecaster (12PM–6PM)'],['AFN★','Day Night Forecaster (12PM–next 12PM)'],['NMF★','Night Morning Forecaster (prev 12PM–today 12PM)'],['MA','Morning Aviation Forecaster (6AM–12PM)'],['DA','Day Aviation Forecaster (12PM–6PM)'],['NWP','Weather Modeling Section Forecaster (9AM–5PM)'],['SM','Sr. Met. Morning (6AM–12PM)'],['SA','Sr. Met. Afternoon (12PM–6PM)'],['SD','Sr. Met. Day (12PM–6PM)'],['SMA','Sr. Met. Aviation Morning (6AM–12PM)'],['SDA','Sr. Met. Aviation Day (12PM–6PM)'],['MO','Morning Observer (6AM–12PM)'],['AO','Afternoon Observer (12PM–6PM)'],['AON★','Day Night Observer (12PM–next 12PM)'],['NMO★','Night Morning Observer (prev 12PM–today 12PM)'],['MO1','Morning Supporting Observer (6AM–12PM)'],['AO2','Afternoon Supporting Observer (12PM–6PM)'],['M1','Morning Supporter (6AM–12PM)'],['A1','Afternoon Supporter (12PM–6PM)'],['Off/xx','Duty Off']]
+${[['MF','Morning Forecaster (6AM–12PM)'],['AF','Afternoon Forecaster (12PM–6PM)'],['AFN★','Day Night Forecaster (12PM–next 12PM)'],['NMF★','Night Morning Forecaster (prev 12PM–today 12PM)'],['MA','Morning Aviation Forecaster (6AM–12PM)'],['DA','Day Aviation Forecaster (12PM–6PM)'],['MA1','Morning Aviation (OJT) Forecaster (6AM–12PM)'],['DA1','Day Aviation (OJT) Forecaster (12PM–6PM)'],['MF1','Morning Supporting (OJT) Forecaster (6AM–12PM)'],['AF1','Day Supporting (OJT) Forecaster (12PM–6PM)'],['SM','Sr. Met. Morning (6AM–12PM)'],['SA','Sr. Met. Afternoon (12PM–6PM)'],['SD','Sr. Met. Day (12PM–6PM)'],['SMA','Sr. Met. Aviation Morning (6AM–12PM)'],['SDA','Sr. Met. Aviation Day (12PM–6PM)'],['MO','Morning Observer (6AM–12PM)'],['AO','Afternoon Observer (12PM–6PM)'],['AON★','Day Night Observer (12PM–next 12PM)'],['NMO★','Night Morning Observer (prev 12PM–today 12PM)'],['MO1','Morning Supporting Observer (6AM–12PM)'],['AO2','Afternoon Supporting Observer (12PM–6PM)'],['M1','Morning Supporter (6AM–12PM)'],['A1','Afternoon Supporter (12PM–6PM)'],['Off/xx','Duty Off']]
   .map(([code,desc])=>`<div><b>${code}</b> — ${desc}</div>`).join('')}
 </div>
 <script>window.onload=()=>setTimeout(()=>window.print(),150);<\/script>
@@ -2440,7 +2470,7 @@ function renderAdminFullRoster(){
     });
     tbody+=`<tr class="${isT?'today-row':''}">${tr}</tr>`;
   }
-  const legendRows=[['MF','Morning Forecaster','6:00 AM – 12:00 PM'],['AF','Afternoon Forecaster','12:00 PM – 6:00 PM'],['AFN★','Day Night Forecaster','12:00 PM – next day 12:00 PM'],['NMF★','Night Morning Forecaster','Prev. day 12:00 PM – Today 12:00 PM'],['MA','Morning Aviation Forecaster','6:00 AM – 12:00 PM'],['DA','Day Aviation Forecaster','12:00 PM – 6:00 PM'],['NWP','Weather Modeling Section Forecaster','9:00 AM – 5:00 PM'],['SM','Sr. Met. Morning','6:00 AM – 12:00 PM'],['SA','Sr. Met. Afternoon','12:00 PM – 6:00 PM'],['SD','Sr. Met. Day','12:00 PM – 6:00 PM'],['SMA','Sr. Met. Aviation Morning','6:00 AM – 12:00 PM'],['SDA','Sr. Met. Aviation Day','12:00 PM – 6:00 PM'],['MO','Morning Observer','6:00 AM – 12:00 PM'],['AO','Afternoon Observer','12:00 PM – 6:00 PM'],['AON★','Day Night Observer','12:00 PM – next day 12:00 PM'],['NMO★','Night Morning Observer','Prev. day 12:00 PM – Today 12:00 PM'],['MO1','Morning Supporting Observer','6:00 AM – 12:00 PM'],['AO2','Afternoon Supporting Observer','12:00 PM – 6:00 PM'],['M1','Morning Supporter','6:00 AM – 12:00 PM'],['A1','Afternoon Supporter','12:00 PM – 6:00 PM'],['Off/xx','Duty Off','—']];
+  const legendRows=[['MF','Morning Forecaster','6:00 AM – 12:00 PM'],['AF','Afternoon Forecaster','12:00 PM – 6:00 PM'],['AFN★','Day Night Forecaster','12:00 PM – next day 12:00 PM'],['NMF★','Night Morning Forecaster','Prev. day 12:00 PM – Today 12:00 PM'],['MA','Morning Aviation Forecaster','6:00 AM – 12:00 PM'],['DA','Day Aviation Forecaster','12:00 PM – 6:00 PM'],['MA1','Morning Aviation (OJT) Forecaster','6:00 AM – 12:00 PM'],['DA1','Day Aviation (OJT) Forecaster','12:00 PM – 6:00 PM'],['MF1','Morning Supporting (OJT) Forecaster','6:00 AM – 12:00 PM'],['AF1','Day Supporting (OJT) Forecaster','12:00 PM – 6:00 PM'],['SM','Sr. Met. Morning','6:00 AM – 12:00 PM'],['SA','Sr. Met. Afternoon','12:00 PM – 6:00 PM'],['SD','Sr. Met. Day','12:00 PM – 6:00 PM'],['SMA','Sr. Met. Aviation Morning','6:00 AM – 12:00 PM'],['SDA','Sr. Met. Aviation Day','12:00 PM – 6:00 PM'],['MO','Morning Observer','6:00 AM – 12:00 PM'],['AO','Afternoon Observer','12:00 PM – 6:00 PM'],['AON★','Day Night Observer','12:00 PM – next day 12:00 PM'],['NMO★','Night Morning Observer','Prev. day 12:00 PM – Today 12:00 PM'],['MO1','Morning Supporting Observer','6:00 AM – 12:00 PM'],['AO2','Afternoon Supporting Observer','12:00 PM – 6:00 PM'],['M1','Morning Supporter','6:00 AM – 12:00 PM'],['A1','Afternoon Supporter','12:00 PM – 6:00 PM'],['Off/xx','Duty Off','—']];
   document.getElementById('afr-table').innerHTML=`<table class="roster-table"><thead><tr>${h1}</tr><tr>${h2}</tr></thead><tbody>${tbody}</tbody></table>
   <div id="afr-legend" style="margin-top:24px;padding:14px 4px">
     <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">📋 Duty Legend</div>
@@ -2664,7 +2694,10 @@ function renderFullRoster(){
     ['NMF★','Night Morning Forecaster','Prev. day 12:00 PM – Today 12:00 PM'],
     ['MA','Morning Aviation Forecaster','6:00 AM – 12:00 PM'],
     ['DA','Day Aviation Forecaster','12:00 PM – 6:00 PM'],
-    ['NWP','Weather Modeling Section Forecaster','9:00 AM – 5:00 PM'],
+    ['MA1','Morning Aviation (OJT) Forecaster','6:00 AM – 12:00 PM'],
+    ['DA1','Day Aviation (OJT) Forecaster','12:00 PM – 6:00 PM'],
+    ['MF1','Morning Supporting (OJT) Forecaster','6:00 AM – 12:00 PM'],
+    ['AF1','Day Supporting (OJT) Forecaster','12:00 PM – 6:00 PM'],
     ['SM','Sr. Met. Morning','6:00 AM – 12:00 PM'],
     ['SA','Sr. Met. Afternoon','12:00 PM – 6:00 PM'],
     ['SD','Sr. Met. Day','12:00 PM – 6:00 PM'],
@@ -3699,6 +3732,46 @@ function renderAdminStaff(){
     const names=(S.staff[sec]&&S.staff[sec][role])||[];
     el.innerHTML=names.map((n,i)=>`<div class="staff-item"><span class="si-name">${n}</span><div class="si-btns"><button class="btn-outline" style="padding:5px 8px;font-size:11px" onclick="resetStaffPassword('${n}','${role}')">🔑 Reset PW</button><button class="btn-yellow" onclick="renameStaff('${sec}','${role}',${i})">Rename</button><button class="btn-red" onclick="removeStaff('${sec}','${role}',${i})">Remove</button></div></div>`).join('')||'<div style="color:var(--text3);font-size:13px;padding:8px 0">No staff added yet</div>';
   }}switchSecTab(S.staffSecTab);
+  renderStationAssignments();
+}
+// ── Station Analysis Assignments (Observers only) ──────────────────
+async function renderStationAssignments(){
+  const el=document.getElementById('station-assign-list');if(!el)return;
+  if(!S.stationAssignments&&S.scriptUrl){
+    try{
+      const res=await fetch(S.scriptUrl+'?action=getStationAssignments');
+      const d=await res.json();
+      S.stationAssignments=d.data||{};
+    }catch(e){S.stationAssignments={};}
+  }
+  S.stationAssignments=S.stationAssignments||{};
+  const observers=[];
+  for(const sec of['avia','weather'])for(const n of((S.staff[sec]&&S.staff[sec].observer)||[]))observers.push({name:n,section:sec});
+  if(!observers.length){el.innerHTML='<div style="color:var(--text3);font-size:13px">No observers added yet.</div>';return;}
+  el.innerHTML=observers.map(o=>{
+    const key=o.section+'|observer|'+o.name;
+    const val=(S.stationAssignments[key]||[]).join(', ');
+    return `<div class="fg" style="margin-bottom:8px">
+      <label class="fl">${o.name} <span style="color:var(--text3);font-weight:400">(${SEC_LABEL[o.section]})</span></label>
+      <input class="fi" data-station-key="${key.replace(/"/g,'&quot;')}" value="${val.replace(/"/g,'&quot;')}" placeholder="e.g. Station D, Station F"/>
+    </div>`;
+  }).join('');
+}
+async function saveStationAssignments(){
+  const inputs=document.querySelectorAll('#station-assign-list [data-station-key]');
+  const assignments={};
+  inputs.forEach(inp=>{
+    const stations=inp.value.split(',').map(s=>s.trim()).filter(Boolean);
+    if(stations.length)assignments[inp.dataset.stationKey]=stations;
+  });
+  S.stationAssignments=assignments;
+  if(!S.scriptUrl){alert('Script URL not configured.');return;}
+  try{
+    const res=await fetch(S.scriptUrl,{method:'POST',body:JSON.stringify({action:'saveStationAssignments',assignments,actorName:S.currentAdmin?.name||'Admin'})});
+    const d=await res.json();
+    if(!d.success){alert('❌ '+(d.error||'Could not save'));return;}
+    alert('✅ Station assignments saved!');
+  }catch(e){alert('❌ Network error');}
 }
 function addStaff(sec,role){
   const ids={avia:{observer:'add-avia-obs',forecaster:'add-avia-fore',sdm:'add-avia-sdm'},weather:{observer:'add-weather-obs',forecaster:'add-weather-fore',sdm:'add-weather-sdm'}};
