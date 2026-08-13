@@ -417,6 +417,10 @@ textarea.fi{resize:vertical;min-height:80px}
 
 <!-- STAFF APP -->
 <div class="screen" id="screen-app">
+  <div id="preview-mode-banner" style="display:none;background:#7c2d12;color:#fff;padding:8px 14px;font-size:12px;font-weight:700;display:none;align-items:center;justify-content:space-between;gap:8px">
+    <span>👁️ Previewing as <span id="preview-mode-name">--</span> (read-only — no actions will be sent)</span>
+    <button onclick="exitStaffPreview()" style="background:#fff;color:#7c2d12;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:11px;cursor:pointer;white-space:nowrap">Exit Preview</button>
+  </div>
   <div class="app-hdr">
     <div class="ah-left">
       <div class="welcome">Welcome,</div>
@@ -3730,9 +3734,41 @@ function renderAdminStaff(){
   for(const sec of['avia','weather']){for(const role of['observer','forecaster','sdm']){
     const el=document.getElementById('sl-'+sec+'-'+role);if(!el)continue;
     const names=(S.staff[sec]&&S.staff[sec][role])||[];
-    el.innerHTML=names.map((n,i)=>`<div class="staff-item"><span class="si-name">${n}</span><div class="si-btns"><button class="btn-outline" style="padding:5px 8px;font-size:11px" onclick="resetStaffPassword('${n}','${role}')">🔑 Reset PW</button><button class="btn-yellow" onclick="renameStaff('${sec}','${role}',${i})">Rename</button><button class="btn-red" onclick="removeStaff('${sec}','${role}',${i})">Remove</button></div></div>`).join('')||'<div style="color:var(--text3);font-size:13px;padding:8px 0">No staff added yet</div>';
+    el.innerHTML=names.map((n,i)=>`<div class="staff-item"><span class="si-name">${n}</span><div class="si-btns"><button class="btn-outline" style="padding:5px 8px;font-size:11px" onclick="previewAsStaff('${n.replace(/'/g,"\\'")}','${role}','${sec}')" title="See their app view — read-only, no login needed">👁️ View</button><button class="btn-outline" style="padding:5px 8px;font-size:11px" onclick="resetStaffPassword('${n}','${role}')">🔑 Reset PW</button><button class="btn-yellow" onclick="renameStaff('${sec}','${role}',${i})">Rename</button><button class="btn-red" onclick="removeStaff('${sec}','${role}',${i})">Remove</button></div></div>`).join('')||'<div style="color:var(--text3);font-size:13px;padding:8px 0">No staff added yet</div>';
   }}switchSecTab(S.staffSecTab);
   renderStationAssignments();
+}
+// ── "View As" — admin previews exactly what a given staff member's app
+// looks like (My Duties, colors, station reminder, everything) WITHOUT
+// their password and WITHOUT touching their real session. Nothing is
+// persisted to localStorage in this mode, and the swap-request FAB /
+// notification bell are hidden so nothing gets sent on their behalf. ──
+function previewAsStaff(name,role,section){
+  S._adminPreviewBackup={currentAdmin:S.currentAdmin};
+  S.previewMode=true;
+  S.user={name,role,section,staffAdmin:false};
+  const banner=document.getElementById('preview-mode-banner');
+  banner.style.display='flex';
+  document.getElementById('preview-mode-name').textContent=name+' ('+(RLABEL[role]||role)+', '+SEC_LABEL[section]+')';
+  document.getElementById('hdr-name').textContent=name;
+  const adminBtn=document.getElementById('hdr-admin-btn');if(adminBtn)adminBtn.style.display='none';
+  const profileBtn=document.getElementById('hdr-profile-btn');if(profileBtn)profileBtn.style.display='none';
+  const fab=document.getElementById('swap-fab');if(fab)fab.style.display='none';
+  const secInline=document.getElementById('section-inline');
+  if(secInline)secInline.textContent=(SEC_ICON[section]||'')+' '+(SEC_LABEL[section]||'');
+  refreshProfileAvatarUI();
+  loadStationReminder();
+  switchScreen('app');
+  switchTab('myduties',document.querySelector(".tab-bar .tab[onclick*=\"'myduties'\"]"));
+}
+function exitStaffPreview(){
+  S.previewMode=false;
+  S.user=null;
+  document.getElementById('preview-mode-banner').style.display='none';
+  const fab=document.getElementById('swap-fab');if(fab)fab.style.display='';
+  const profileBtn=document.getElementById('hdr-profile-btn');if(profileBtn)profileBtn.style.display='';
+  if(S._adminPreviewBackup){S.currentAdmin=S._adminPreviewBackup.currentAdmin;S._adminPreviewBackup=null;}
+  switchScreen('admin');
 }
 // ── Station Analysis Assignments (Observers only) ──────────────────
 async function renderStationAssignments(){
