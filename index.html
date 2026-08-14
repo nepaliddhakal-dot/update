@@ -213,7 +213,7 @@ input,select,textarea{font-family:'Inter',sans-serif}
 .zoom-btn{background:var(--card2);border:1px solid var(--border);color:var(--text);font-size:14px;font-weight:700;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center}
 .zoom-label{font-size:11px;color:var(--text2);min-width:34px;text-align:center}
 .roster-outer{flex:1;overflow:auto;position:relative}
-.roster-scale-wrap{transform-origin:top left;display:inline-block;min-width:100%}
+.roster-scale-wrap{display:inline-block;min-width:100%}
 .roster-table{border-collapse:collapse;font-size:11px;white-space:nowrap}
 .roster-table th{background:var(--bg3);color:var(--text2);font-size:10px;font-weight:600;padding:5px 4px;border:1px solid var(--border);position:sticky;top:0;z-index:3;text-align:center;min-width:40px;box-shadow:0 2px 4px rgba(0,0,0,.35)}
 .roster-table thead{position:sticky;top:0;z-index:4}
@@ -997,7 +997,7 @@ textarea.fi{resize:vertical;min-height:80px}
           <button class="btn-outline" onclick="adminFrPrintRoster()" style="padding:5px 12px;font-size:12px">🖨️ Print</button>
         </div>
         <div style="overflow:auto;flex:1;position:relative">
-          <div id="afr-scale" style="transform-origin:top left;display:inline-block;min-width:100%">
+          <div id="afr-scale" style="display:inline-block;min-width:100%">
             <div id="afr-table"></div>
           </div>
         </div>
@@ -2287,9 +2287,16 @@ function renderCalendar(){
 // ── FULL ROSTER — all roles, both sections, deduplicated, SDM → Forecaster → Observer ──
 function frPrev(){S.frBsMonth--;if(S.frBsMonth<0){S.frBsMonth=11;S.frBsYear--;}renderFullRoster();}
 function frNext(){S.frBsMonth++;if(S.frBsMonth>11){S.frBsMonth=0;S.frBsYear++;}renderFullRoster();}
+// ── Zoom uses CSS "zoom" (real layout scaling), NOT "transform:scale()".
+// transform creates a new containing block for its children, which breaks
+// position:sticky's offset math for anything inside it — that's exactly
+// what caused the sticky header row to misalign and let a data row bleed
+// through underneath at zoom levels other than 100%. "zoom" scales actual
+// layout (like changing font-size proportionally) so sticky positioning
+// keeps working correctly at any zoom level. ────────────────────────────
 function frZoomIn(){S.frZoom=Math.min(2,+(S.frZoom+0.1).toFixed(1));applyZoom();}
 function frZoomOut(){S.frZoom=Math.max(0.4,+(S.frZoom-0.1).toFixed(1));applyZoom();}
-function applyZoom(){document.getElementById('fr-scale').style.transform=`scale(${S.frZoom})`;document.getElementById('fr-zoom-lbl').textContent=Math.round(S.frZoom*100)+'%';}
+function applyZoom(){document.getElementById('fr-scale').style.zoom=S.frZoom;document.getElementById('fr-zoom-lbl').textContent=Math.round(S.frZoom*100)+'%';}
 function frGoToday(){const c=getCurrentBsMonth();S.frBsYear=c.bsY;S.frBsMonth=c.bsM;renderFullRoster();setTimeout(()=>{const el=document.querySelector('#fr-table .today-row');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});},200);}
 function frGoLegend(){const el=document.getElementById('fr-legend');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
 function officialLetterheadHtml(subtitle){
@@ -2393,8 +2400,8 @@ ${[['MF','Morning Forecaster (6AM–12PM)'],['AF','Afternoon Forecaster (12PM–
 }
 // ── ADMIN FULL ROSTER ──
 let afrZoom=1,afrBsYear=2083,afrBsMonth=0,afrSection='all',afrSectionInit=false;
-function adminFrZoomIn(){afrZoom=Math.min(2,+(afrZoom+0.1).toFixed(1));document.getElementById('afr-scale').style.transform=`scale(${afrZoom})`;document.getElementById('afr-zoom-lbl').textContent=Math.round(afrZoom*100)+'%';}
-function adminFrZoomOut(){afrZoom=Math.max(0.4,+(afrZoom-0.1).toFixed(1));document.getElementById('afr-scale').style.transform=`scale(${afrZoom})`;document.getElementById('afr-zoom-lbl').textContent=Math.round(afrZoom*100)+'%';}
+function adminFrZoomIn(){afrZoom=Math.min(2,+(afrZoom+0.1).toFixed(1));document.getElementById('afr-scale').style.zoom=afrZoom;document.getElementById('afr-zoom-lbl').textContent=Math.round(afrZoom*100)+'%';}
+function adminFrZoomOut(){afrZoom=Math.max(0.4,+(afrZoom-0.1).toFixed(1));document.getElementById('afr-scale').style.zoom=afrZoom;document.getElementById('afr-zoom-lbl').textContent=Math.round(afrZoom*100)+'%';}
 function adminFrPrev(){afrBsMonth--;if(afrBsMonth<0){afrBsMonth=11;afrBsYear--;}renderAdminFullRoster();}
 function adminFrNext(){afrBsMonth++;if(afrBsMonth>11){afrBsMonth=0;afrBsYear++;}renderAdminFullRoster();}
 function adminFrGoToday(){const c=getCurrentBsMonth();afrBsYear=c.bsY;afrBsMonth=c.bsM;renderAdminFullRoster();setTimeout(()=>{const el=document.querySelector('#afr-table .today-row');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});},200);}
