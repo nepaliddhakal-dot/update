@@ -2649,10 +2649,13 @@ function renderFullRoster(){
   if(showWeeklyCol) h1+=`<th rowspan="2" style="position:sticky;top:0;z-index:6;background:#F5A623;color:#000;min-width:64px;font-size:11px">🗓️<br/>Weekly<br/>Forecaster</th>`;
   if(obsList.length) h1+=`<th class="sec-span-hdr obs-hdr" colspan="${obsList.length}" style="position:sticky;top:0">🔭 Observer (${obsList.length})</th>`;
 
-  // Header row 2: individual name columns — bold, larger name; smaller role subtitle
+  // Header row 2: individual name columns — just the name, matching the
+  // clean single-line style of the Weekly Forecaster header. The role is
+  // already shown once in the group header above (e.g. "🌤️ Forecaster (7)"),
+  // so repeating it under every single name was redundant clutter.
  let h2='';
   for(const{name,role}of allStaff){
-    h2+=`<th title="${name}" style="min-width:80px;max-width:120px;white-space:normal;word-break:break-word;line-height:1.3;position:sticky;top:28px;background:var(--bg3);z-index:3;box-shadow:0 2px 4px rgba(0,0,0,.3)"><span style="font-size:13px;font-weight:800;color:var(--text)">${name}</span><br/><span style="font-size:8px;font-weight:400;color:var(--text3)">${RICON[role]} ${RLABEL[role]}</span></th>`;
+    h2+=`<th title="${RICON[role]} ${RLABEL[role]}" style="min-width:80px;max-width:120px;white-space:normal;word-break:break-word;line-height:1.3;position:sticky;top:28px;background:var(--bg3);z-index:3;box-shadow:0 2px 4px rgba(0,0,0,.3)"><span style="font-size:13px;font-weight:800;color:var(--text)">${name}</span></th>`;
   }
 
   // Data rows — Weekly Forecaster is a merged, vertical-text cell spanning
