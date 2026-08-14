@@ -2296,7 +2296,7 @@ function frNext(){S.frBsMonth++;if(S.frBsMonth>11){S.frBsMonth=0;S.frBsYear++;}r
 // keeps working correctly at any zoom level. ────────────────────────────
 function frZoomIn(){S.frZoom=Math.min(2,+(S.frZoom+0.1).toFixed(1));applyZoom();}
 function frZoomOut(){S.frZoom=Math.max(0.4,+(S.frZoom-0.1).toFixed(1));applyZoom();}
-function applyZoom(){document.getElementById('fr-scale').style.zoom=S.frZoom;document.getElementById('fr-zoom-lbl').textContent=Math.round(S.frZoom*100)+'%';}
+function applyZoom(){document.getElementById('fr-scale').style.zoom=S.frZoom;document.getElementById('fr-zoom-lbl').textContent=Math.round(S.frZoom*100)+'%';fixStickyHeaderOffset('fr-table');}
 function frGoToday(){const c=getCurrentBsMonth();S.frBsYear=c.bsY;S.frBsMonth=c.bsM;renderFullRoster();setTimeout(()=>{const el=document.querySelector('#fr-table .today-row');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});},200);}
 function frGoLegend(){const el=document.getElementById('fr-legend');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
 function officialLetterheadHtml(subtitle){
@@ -2400,8 +2400,8 @@ ${[['MF','Morning Forecaster (6AM–12PM)'],['AF','Afternoon Forecaster (12PM–
 }
 // ── ADMIN FULL ROSTER ──
 let afrZoom=1,afrBsYear=2083,afrBsMonth=0,afrSection='all',afrSectionInit=false;
-function adminFrZoomIn(){afrZoom=Math.min(2,+(afrZoom+0.1).toFixed(1));document.getElementById('afr-scale').style.zoom=afrZoom;document.getElementById('afr-zoom-lbl').textContent=Math.round(afrZoom*100)+'%';}
-function adminFrZoomOut(){afrZoom=Math.max(0.4,+(afrZoom-0.1).toFixed(1));document.getElementById('afr-scale').style.zoom=afrZoom;document.getElementById('afr-zoom-lbl').textContent=Math.round(afrZoom*100)+'%';}
+function adminFrZoomIn(){afrZoom=Math.min(2,+(afrZoom+0.1).toFixed(1));document.getElementById('afr-scale').style.zoom=afrZoom;document.getElementById('afr-zoom-lbl').textContent=Math.round(afrZoom*100)+'%';fixStickyHeaderOffset('afr-table');}
+function adminFrZoomOut(){afrZoom=Math.max(0.4,+(afrZoom-0.1).toFixed(1));document.getElementById('afr-scale').style.zoom=afrZoom;document.getElementById('afr-zoom-lbl').textContent=Math.round(afrZoom*100)+'%';fixStickyHeaderOffset('afr-table');}
 function adminFrPrev(){afrBsMonth--;if(afrBsMonth<0){afrBsMonth=11;afrBsYear--;}renderAdminFullRoster();}
 function adminFrNext(){afrBsMonth++;if(afrBsMonth>11){afrBsMonth=0;afrBsYear++;}renderAdminFullRoster();}
 function adminFrGoToday(){const c=getCurrentBsMonth();afrBsYear=c.bsY;afrBsMonth=c.bsM;renderAdminFullRoster();setTimeout(()=>{const el=document.querySelector('#afr-table .today-row');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});},200);}
@@ -2506,6 +2506,7 @@ function renderAdminFullRoster(){
       </tr>`).join('')}</tbody>
     </table>
   </div>`;
+  fixStickyHeaderOffset('afr-table');
   setTimeout(()=>{const el=document.querySelector('#afr-table .today-row');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});},150);
 }
 function adminFrPrintRoster(){
@@ -2764,7 +2765,33 @@ function renderFullRoster(){
     <thead><tr>${h1}</tr><tr>${h2}</tr></thead>
     <tbody>${tbody}</tbody>
   </table>${legendTableHtml}`;
+  fixStickyHeaderOffset('fr-table');
   setTimeout(()=>{const el=document.querySelector('#fr-table .today-row');if(el)el.scrollIntoView({block:'center',behavior:'smooth'});},150);
+}
+// ── Row 2 of the header (staff names) is position:sticky with a top offset
+// that has to exactly match row 1's real rendered height, or row 2 sits in
+// the wrong place and lets a data row bleed through the gap. That height
+// isn't a fixed number — it depends on font size, zoom level, and whether
+// row 1 wraps to more than one line — so instead of guessing a px value in
+// CSS, measure row 1 for real after each render and set row 2's offset to
+// match exactly. Re-run after zoom changes too, since zoom changes row 1's
+// real size (that's also why this uses CSS `zoom`, not `transform`, for
+// zooming — transform doesn't produce a real, measurable layout height).
+function fixStickyHeaderOffset(tableId){
+  requestAnimationFrame(()=>{
+    const table=document.getElementById(tableId)?.querySelector('table.roster-table');
+    if(!table)return;
+    const row1=table.querySelector('thead tr:first-child');
+    if(!row1)return;
+    // Only cells that live in row 1 alone (not the rowspan=2 Date/Weekly Forecaster
+    // columns, which span both rows and so don't reflect row 1's height alone).
+    const row1OnlyCells=Array.from(row1.children).filter(th=>th.rowSpan!==2);
+    const h=row1OnlyCells.length
+      ? Math.max(...row1OnlyCells.map(th=>th.getBoundingClientRect().height))
+      : row1.getBoundingClientRect().height;
+    const row2=table.querySelector('thead tr:nth-child(2)');
+    if(row2)Array.from(row2.children).forEach(th=>{th.style.top=h+'px';});
+  });
 }
 
 // ── DAY MODAL ──
